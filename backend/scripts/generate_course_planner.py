@@ -15,6 +15,22 @@ If Query Resolution occurs in a week's topic sequence:
     - The topic remains without a teaching date rather than violating the
       Friday-only rule.
 
+FRIDAY RESERVATION (mid-week starts)
+-------------------------------------
+A week's Friday is reserved for its Query Resolution row as soon as that
+row is detected ahead in the same week-block (the run of day rows between
+two weekend banners). Normal (non-Query-Resolution) topics are never
+allowed to land on that reserved Friday - if the day-by-day walk would
+put a normal topic there, that topic rolls forward to the next Monday
+instead, and Query Resolution still gets that week's Friday.
+
+Without this reservation, a mid-week start (e.g. batch starting on a
+Tuesday) can cause an ordinary topic to consume the week's real Friday
+before the Query Resolution row is reached, which then forces Query
+Resolution to jump to the FOLLOWING week's Friday - silently skipping an
+entire week and shifting every subsequent date in the planner by one
+week. The reservation logic below prevents that.
+
 MID-WEEK START RULE
 --------------------
 - If the batch starts on Monday, the planner follows the template exactly
@@ -567,6 +583,42 @@ def is_query_resolution_row(
     )
 
 
+def block_has_query_resolution(
+    ws,
+    start_r,
+    date_col,
+    topic_cols,
+    value
+):
+    """
+    Look ahead from start_r to see whether the CURRENT week-block (the
+    run of rows up to, but not including, the next weekend banner row)
+    contains a Query Resolution row.
+
+    This is a pure lookahead - it does not stamp or modify anything. It
+    is used so that, before any normal topic in the block is dated, we
+    already know whether that week's Friday needs to be reserved for
+    Query Resolution.
+    """
+    r = start_r
+    while r <= ws.max_row:
+        if is_weekend_row(
+            value,
+            r,
+            date_col
+        ):
+            return False
+        if is_query_resolution_row(
+            ws,
+            r,
+            date_col,
+            topic_cols
+        ):
+            return True
+        r += 1
+    return False
+
+
 # --------------------------------------------------------------------------- #
 # Row classification
 # --------------------------------------------------------------------------- #
@@ -1024,6 +1076,15 @@ def fill_dates(
     marked = 0
     last_stamped = None
 
+    # Friday-reservation state (OFFLINE only). `pending_friday_reserve`
+    # holds the date that the CURRENT week-block's Query Resolution row
+    # is entitled to - computed once, as soon as we enter a new block,
+    # by looking ahead for a Query Resolution row before the next
+    # weekend banner. `need_block_scan` tracks whether that lookahead is
+    # still owed for the block we're currently walking through.
+    pending_friday_reserve = None
+    need_block_scan = True
+
     data_start = first_data_row(ws)
     header_row = data_start - 1
     tl_col = (
@@ -1088,6 +1149,11 @@ def fill_dates(
                 current,
                 MONDAY
             )
+            # A new week-block starts after this banner - any Friday
+            # reservation from the previous block is done, and the next
+            # block needs its own fresh lookahead.
+            pending_friday_reserve = None
+            need_block_scan = True
             continue
 
         # -------------------------------------------------------------- #
@@ -1142,6 +1208,27 @@ def fill_dates(
         # ============================================================== #
         # OFFLINE LOGIC
         # ============================================================== #
+
+        # -------------------------------------------------------------- #
+        # Reserve this week-block's Friday for Query Resolution, BEFORE
+        # any normal topic in the block gets a date. This is computed
+        # once per block (see need_block_scan) and is what prevents a
+        # normal topic from stealing the real Friday when the batch
+        # starts mid-week.
+        # -------------------------------------------------------------- #
+        if need_block_scan:
+            if block_has_query_resolution(
+                ws,
+                r,
+                date_col,
+                topic_cols,
+                value
+            ):
+                pending_friday_reserve = next_friday(current)
+            else:
+                pending_friday_reserve = None
+            need_block_scan = False
+
         query_resolution = is_query_resolution_row(
             ws,
             r,
@@ -1157,7 +1244,10 @@ def fill_dates(
         #
         # Regardless of whether the batch started Monday, Tuesday,
         # Wednesday or Thursday, and regardless of the row's position in
-        # the template, Query Resolution waits for Friday.
+        # the template, Query Resolution always receives the Friday that
+        # was reserved for this week-block the moment the block was
+        # entered - never a later week's Friday, and never a weekday
+        # Monday-Thursday.
         #
         # Example:
         #
@@ -1172,15 +1262,20 @@ def fill_dates(
         # Friday    -> HOLIDAY
         # Query Resolution -> no date
         #
-        # It is NEVER moved to Thursday, and its row is NEVER moved to a
-        # different position in the sheet.
+        # It is NEVER moved to Thursday, NEVER pushed to a following
+        # week, and its row is NEVER moved to a different position in
+        # the sheet.
         # -------------------------------------------------------------- #
         if query_resolution:
-            friday = next_friday(current)
+            friday = (
+                pending_friday_reserve
+                if pending_friday_reserve is not None
+                else next_friday(current)
+            )
 
             # If the calculated Friday is before the current date due to
             # unusual input, protect against accidental backwards dates.
-            if friday < current:
+            if friday < current and pending_friday_reserve is None:
                 friday += datetime.timedelta(
                     days=7
                 )
@@ -1207,9 +1302,11 @@ def fill_dates(
                 # move its row. Just move the calendar pointer beyond
                 # this Friday so subsequent topics (in their existing
                 # rows) continue from the next available working period.
-                current = friday + datetime.timedelta(
-                    days=1
+                current = max(
+                    current,
+                    friday + datetime.timedelta(days=1)
                 )
+                pending_friday_reserve = None
                 continue
 
             # Friday is available.
@@ -1224,10 +1321,17 @@ def fill_dates(
                 date_col
             ).number_format = "m/d/yyyy"
             last_stamped = friday
-            # Continue after Friday.
-            current = friday + datetime.timedelta(
-                days=1
+            # Continue after Friday. Use max() rather than a plain
+            # reassignment because normal topics earlier in this same
+            # block may have already rolled the pointer forward past
+            # this Friday (they were pushed to next Monday to keep out
+            # of Query Resolution's reserved slot) - current must never
+            # move backwards.
+            current = max(
+                current,
+                friday + datetime.timedelta(days=1)
             )
+            pending_friday_reserve = None
             continue
 
         # -------------------------------------------------------------- #
@@ -1237,6 +1341,26 @@ def fill_dates(
             current,
             holidays
         )
+
+        # This week's Friday belongs to Query Resolution (reserved
+        # above) - a normal topic must never be dated onto it. If the
+        # sequential walk would otherwise land here, roll forward to the
+        # next Monday instead. This is what stops a mid-week start from
+        # having an ordinary topic consume the real Friday and forcing
+        # Query Resolution to jump an entire week ahead.
+        if (
+            pending_friday_reserve is not None
+            and current == pending_friday_reserve
+        ):
+            current = on_or_after(
+                current + datetime.timedelta(days=1),
+                MONDAY
+            )
+            current = find_next_regular_weekday(
+                current,
+                holidays
+            )
+
         set_cell(
             ws,
             r,
