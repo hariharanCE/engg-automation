@@ -1,7 +1,6 @@
 """
 Course Planner Generator
 ========================
-
 Fills a domain-specific Course Planner template into an .xlsx file.
 
 IMPORTANT COURSE RULE
@@ -15,6 +14,21 @@ If Query Resolution occurs in a week's topic sequence:
     - Query Resolution is NOT moved to Thursday or another weekday.
     - The topic remains without a teaching date rather than violating the
       Friday-only rule.
+
+MID-WEEK START RULE
+--------------------
+- If the batch starts on Monday, the planner follows the template exactly
+  as authored (topic order, week grouping, everything) - this is the
+  baseline behavior and is unchanged.
+- If the batch starts on Tuesday, Wednesday, Thursday or Friday, the
+  planner adjusts the CALENDAR DATES that get stamped onto each row so
+  that teaching begins on the given start date. The template's topic
+  sequence (which row holds which topic, including which row holds
+  Query Resolution) is NEVER re-ordered or re-packed to "fit" the
+  remaining days of the week. Only the dates change - topics stay
+  exactly where the template put them, row for row.
+- Query Resolution keeps landing only on an actual Friday (enforced in
+  fill_dates below), regardless of which weekday the batch started on.
 
 All existing weekend, holiday, Online-batch, metadata and template handling
 is preserved.
@@ -42,17 +56,14 @@ except ImportError:
         "openpyxl is required. Install it with: pip install openpyxl"
     )
 
-
 # --------------------------------------------------------------------------- #
 # Constants
 # --------------------------------------------------------------------------- #
-
 HOLIDAY_FILL = PatternFill(
     start_color="FFF2CC",
     end_color="FFF2CC",
     fill_type="solid"
 )
-
 HOLIDAY_FONT = Font(
     bold=True,
     color="FFC00000"
@@ -60,6 +71,7 @@ HOLIDAY_FONT = Font(
 
 TOPIC_COLS = range(3, 10)       # C..I
 DATE_COL = 2                    # B
+
 WEEKEND_RE = re.compile(
     r"weekend|saturday\s*&\s*sunday",
     re.I
@@ -82,10 +94,8 @@ QUERY_RESOLUTION_RE = re.compile(
 # --------------------------------------------------------------------------- #
 # Template discovery
 # --------------------------------------------------------------------------- #
-
 def find_template(template_dir, domain, batch_type=""):
     """Pick the template workbook for the chosen domain + batch type."""
-
     dom = domain.strip().lower()
     bt = (batch_type or "").strip().lower()
 
@@ -103,7 +113,6 @@ def find_template(template_dir, domain, batch_type=""):
     if bt:
         for path in candidates:
             name = os.path.basename(path).lower()
-
             if (
                 name.startswith(bt)
                 and "course planner template" in name
@@ -114,7 +123,6 @@ def find_template(template_dir, domain, batch_type=""):
     # 2) Backward compatible search
     for path in candidates:
         name = os.path.basename(path).lower()
-
         if (
             "course planner template" in name
             and domain_ok(name)
@@ -125,7 +133,6 @@ def find_template(template_dir, domain, batch_type=""):
     # 3) Loosest fallback
     for path in candidates:
         name = os.path.basename(path).lower()
-
         if (
             "template" in name
             and dom in name
@@ -139,7 +146,6 @@ def find_template(template_dir, domain, batch_type=""):
         if "course planner template"
         in os.path.basename(p).lower()
     )
-
     raise FileNotFoundError(
         f"No {batch_type or ''} {domain} course planner template is available. "
         f'Add a workbook named "{batch_type or "<Offline|Online>"} - '
@@ -151,10 +157,8 @@ def find_template(template_dir, domain, batch_type=""):
 # --------------------------------------------------------------------------- #
 # Header helpers
 # --------------------------------------------------------------------------- #
-
 def _header_text(v):
     """Normalise a header cell."""
-
     return (
         v.replace("\xa0", " ").strip().lower()
         if isinstance(v, str)
@@ -164,23 +168,19 @@ def _header_text(v):
 
 def find_header_column(ws, data_start, names, default=0):
     """Locate a column by its header label."""
-
     limit = min(
         ws.max_row,
         max(data_start + 2, 15)
     )
-
     for r in range(1, limit + 1):
         for c in range(1, ws.max_column + 1):
             if _header_text(ws.cell(r, c).value) in names:
                 return c
-
     return default
 
 
 def find_date_column(ws, data_start):
     """Locate Date column."""
-
     return find_header_column(
         ws,
         data_start,
@@ -191,7 +191,6 @@ def find_date_column(ws, data_start):
 
 def find_theory_lab_column(ws, data_start):
     """Locate Theory/Lab column."""
-
     return find_header_column(
         ws,
         data_start,
@@ -202,28 +201,21 @@ def find_theory_lab_column(ws, data_start):
 
 def session_weekday(ws, value, r, tl_col):
     """Return weekend day for Online Theory/Lab rows."""
-
     if not tl_col:
         return None
-
     t = _header_text(value(r, tl_col))
-
     if t.startswith("theory"):
         return SATURDAY
-
     if t.startswith("lab"):
         return SUNDAY
-
     return None
 
 
 # --------------------------------------------------------------------------- #
 # Date helpers
 # --------------------------------------------------------------------------- #
-
 def on_or_after(d, weekday):
     """First date on or after d matching weekday."""
-
     return d + datetime.timedelta(
         days=(weekday - d.weekday()) % 7
     )
@@ -231,27 +223,20 @@ def on_or_after(d, weekday):
 
 def weekend_of(d):
     """Return Saturday/Sunday for the weekend containing d."""
-
     wd = d.weekday()
-
     if wd == SATURDAY:
         return d, d + datetime.timedelta(days=1)
-
     if wd == SUNDAY:
         return d - datetime.timedelta(days=1), d
-
     sat = d + datetime.timedelta(
         days=(SATURDAY - wd)
     )
-
     return sat, sat + datetime.timedelta(days=1)
 
 
 def next_weekend_after(d):
     """Return the weekend following d's weekend."""
-
     sat, sun = weekend_of(d)
-
     return (
         sat + datetime.timedelta(days=7),
         sun + datetime.timedelta(days=7)
@@ -261,53 +246,40 @@ def next_weekend_after(d):
 # --------------------------------------------------------------------------- #
 # Course break
 # --------------------------------------------------------------------------- #
-
 def fill_course_break(ws, r, last_stamped, current):
     """Handle Online Course Break placeholder."""
-
     for c in range(1, ws.max_column + 1):
-
         tc = target_cell(ws, r, c)
         v = tc.value
-
         if isinstance(v, str) and "(current_weekend)" in v:
-
             if last_stamped is not None:
                 sat, sun = next_weekend_after(last_stamped)
             else:
                 sat, sun = weekend_of(current)
-
             label = (
                 f"{sat.strftime('%d-%b-%Y')} & "
                 f"{sun.strftime('%d-%b-%Y')}"
             )
-
             tc.value = v.replace(
                 "(current_weekend)",
                 label
             )
-
             return True, sun + datetime.timedelta(days=1)
-
     return False, None
 
 
 # --------------------------------------------------------------------------- #
 # Holiday list
 # --------------------------------------------------------------------------- #
-
 def load_holidays(holiday_file):
     """
     Return:
         {
             date: holiday_name
         }
-
     Only Type of Holiday == Holiday is treated as a full holiday.
     """
-
     holidays = {}
-
     if not holiday_file or not os.path.exists(holiday_file):
         return holidays
 
@@ -315,7 +287,6 @@ def load_holidays(holiday_file):
         holiday_file,
         data_only=True
     )
-
     ws = wb.active
 
     header = {
@@ -323,52 +294,38 @@ def load_holidays(holiday_file):
         for c in range(1, ws.max_column + 1)
         if ws.cell(1, c).value
     }
-
     date_c = header.get("date", 1)
     name_c = header.get("holiday", 3)
     type_c = header.get("type of holiday", 4)
 
     for r in range(2, ws.max_row + 1):
-
         d = ws.cell(r, date_c).value
         t = ws.cell(r, type_c).value
-
         if isinstance(d, datetime.datetime):
             d = d.date()
-
         if not isinstance(d, datetime.date):
             continue
-
         if str(t).strip().lower() == "holiday":
-
             holidays[d] = str(
                 ws.cell(r, name_c).value or "Holiday"
             ).strip()
-
     return holidays
 
 
 # --------------------------------------------------------------------------- #
 # Merge-aware helpers
 # --------------------------------------------------------------------------- #
-
 def build_resolvers(ws):
     """Build merge-aware value/span resolvers."""
-
     anchor = {}
     width = {}
-
     for m in ws.merged_cells.ranges:
-
         a = ws.cell(
             m.min_row,
             m.min_col
         ).value
-
         for r in range(m.min_row, m.max_row + 1):
-
             for c in range(m.min_col, m.max_col + 1):
-
                 anchor[(r, c)] = a
                 width[(r, c)] = (
                     m.max_col - m.min_col
@@ -378,20 +335,16 @@ def build_resolvers(ws):
         (r, c),
         ws.cell(r, c).value
     )
-
     span = lambda r, c: width.get(
         (r, c),
         0
     )
-
     return value, span
 
 
 def target_cell(ws, r, c):
     """Return writable cell for a possibly merged location."""
-
     for m in ws.merged_cells.ranges:
-
         if (
             m.min_row <= r <= m.max_row
             and m.min_col <= c <= m.max_col
@@ -400,81 +353,64 @@ def target_cell(ws, r, c):
                 m.min_row,
                 m.min_col
             )
-
     return ws.cell(r, c)
 
 
 def set_cell(ws, r, c, val):
     """Write to a cell respecting merges."""
-
     target_cell(ws, r, c).value = val
 
 
 # --------------------------------------------------------------------------- #
 # Metadata
 # --------------------------------------------------------------------------- #
-
 def fill_metadata(ws, cfg):
     """Fill batch metadata."""
-
     s1 = cfg.get("session1", "")
     s2 = cfg.get("session2", "")
     s3 = cfg.get("session3", "")
-
     batch = cfg["batch_no"]
     dom = cfg["domain"]
     lab = cfg.get("lab_timings", "")
 
     for row in ws.iter_rows():
-
         for cell in row:
-
             v = cell.value
-
             if not isinstance(v, str):
                 continue
 
             new = v
-
             new = new.replace(
                 "(batch_no)",
                 batch
             )
-
             new = new.replace(
                 "(session1_timings)",
                 s1
             )
-
             new = new.replace(
                 "(session2_timinigs)",
                 s2
             )
-
             new = new.replace(
                 "(session2_timings)",
                 s2
             )
-
             new = new.replace(
                 "(session3_timings)",
                 s3
             )
-
             new = re.sub(
                 r"(Session\s*1\s*:)[ \t]*",
                 rf"\g<1> {s1}",
                 new
             )
-
             new = re.sub(
                 r"(Session\s*2\s*:)[ \t]*",
                 rf"\g<1> {s2}",
                 new
             )
-
             if s3:
-
                 new = re.sub(
                     r"(Session\s*3\s*:)[ \t]*",
                     rf"\g<1> {s3}",
@@ -482,19 +418,16 @@ def fill_metadata(ws, cfg):
                 )
 
             low = v.lower()
-
             if (
                 low.strip().rstrip(":") == "domain"
                 or low.startswith("domain:")
             ):
                 new = f"Domain: {dom}"
-
             elif (
                 low.strip().rstrip(":") == "batch no"
                 or low.startswith("batch no:")
             ):
                 new = f"Batch No: {batch}"
-
             elif (
                 low.startswith("lab access timings")
                 and lab
@@ -515,7 +448,6 @@ def fill_metadata(ws, cfg):
                     new,
                     flags=re.I | re.S
                 )
-
             if (
                 s2
                 and re.match(
@@ -529,7 +461,6 @@ def fill_metadata(ws, cfg):
                     new,
                     flags=re.I | re.S
                 )
-
             if (
                 s3
                 and re.match(
@@ -551,10 +482,8 @@ def fill_metadata(ws, cfg):
 # --------------------------------------------------------------------------- #
 # Row detection
 # --------------------------------------------------------------------------- #
-
 def first_data_row(ws):
     """Find first Week-No row."""
-
     return next(
         (
             r
@@ -574,23 +503,18 @@ def first_data_row(ws):
 
 def last_content_row(ws):
     """Find last row containing content."""
-
     for r in range(ws.max_row, 0, -1):
-
         if any(
             ws.cell(r, c).value is not None
             for c in range(1, ws.max_column + 1)
         ):
             return r
-
     return ws.max_row
 
 
 def is_weekend_row(value, r, date_col):
     """Detect weekend banner row."""
-
     v = value(r, date_col)
-
     return (
         isinstance(v, str)
         and bool(WEEKEND_RE.search(v))
@@ -600,7 +524,6 @@ def is_weekend_row(value, r, date_col):
 # --------------------------------------------------------------------------- #
 # Query Resolution detection
 # --------------------------------------------------------------------------- #
-
 def row_contains_query_resolution(ws, r, topic_cols):
     """
     Detect whether a schedule row contains Query Resolution.
@@ -614,19 +537,13 @@ def row_contains_query_resolution(ws, r, topic_cols):
         QUERY RESOLUTION
         Query   Resolution
     """
-
     for c in topic_cols:
-
         raw = ws.cell(r, c).value
-
         if raw is None:
             continue
-
         text = str(raw).replace("\xa0", " ")
-
         if QUERY_RESOLUTION_RE.search(text):
             return True
-
     return False
 
 
@@ -643,7 +560,6 @@ def is_query_resolution_row(
     merge-resolved values, preventing inherited module text from causing
     false positives.
     """
-
     return row_contains_query_resolution(
         ws,
         r,
@@ -654,7 +570,6 @@ def is_query_resolution_row(
 # --------------------------------------------------------------------------- #
 # Row classification
 # --------------------------------------------------------------------------- #
-
 def is_day_row(
     ws,
     value,
@@ -664,31 +579,24 @@ def is_day_row(
     topic_cols
 ):
     """Determine whether row represents a teaching day."""
-
     b = value(r, date_col)
-
     if (
         isinstance(b, str)
         and WEEKEND_RE.search(b)
     ):
         return False
-
     if (
         isinstance(b, str)
         and span(r, date_col) >= 5
     ):
         return False
-
     for c in topic_cols:
-
         v = ws.cell(r, c).value
-
         if (
             v is not None
             and str(v).strip()
         ):
             return True
-
     return False
 
 
@@ -702,21 +610,17 @@ def classify_rows(
     topic_cols
 ):
     """Classify schedule rows."""
-
     kind = {}
-
     for r in range(
         data_start,
         region_end + 1
     ):
-
         if is_weekend_row(
             value,
             r,
             date_col
         ):
             kind[r] = "weekend"
-
         elif is_day_row(
             ws,
             value,
@@ -726,98 +630,38 @@ def classify_rows(
             topic_cols
         ):
             kind[r] = "day"
-
         else:
             kind[r] = "other"
-
     return kind
 
 
 # --------------------------------------------------------------------------- #
-# Week re-flow
+# Week numbering (fixed template order - rows are NEVER re-ordered)
 # --------------------------------------------------------------------------- #
-
-def plan_row_order(
-    kind,
-    data_start,
-    region_end,
-    pad
-):
-    """
-    Re-order schedule rows so no week exceeds five teaching days.
-
-    pad:
-        Monday = 0
-        Tuesday = 1
-        Wednesday = 2
-        Thursday = 3
-        Friday = 4
-    """
-
-    seq = list(
-        range(
-            data_start,
-            region_end + 1
-        )
-    )
-
-    out = []
-
-    day_count = pad
-    i = 0
-
-    while i < len(seq):
-
-        r = seq[i]
-        k = kind[r]
-
-        if k == "weekend":
-
-            out.append(r)
-
-            day_count = 0
-            i += 1
-            continue
-
-        if (
-            k == "day"
-            and day_count >= TEACHING_DAYS_PER_WEEK
-        ):
-
-            nxt = next(
-                (
-                    x
-                    for x in seq[i:]
-                    if kind[x] == "weekend"
-                ),
-                None
-            )
-
-            if nxt is not None:
-
-                seq.remove(nxt)
-                out.append(nxt)
-
-                day_count = 0
-
-                continue
-
-        if k == "day":
-            day_count += 1
-
-        out.append(r)
-        i += 1
-
-    return out
-
-
+#
+# NOTE: Earlier revisions of this script re-packed rows for a mid-week
+# start (moving the "weekend" banner row earlier so no week exceeded five
+# teaching days). That re-packing has been intentionally removed.
+#
+# Reason: the template's row order encodes which topic belongs to which
+# slot (in particular, which row holds the Friday-only "Query Resolution"
+# topic). Re-ordering rows - even just moving banner rows - changes which
+# calendar week a topic's row is grouped under and adds unnecessary risk
+# of a Friday-only topic drifting away from its intended slot.
+#
+# The new approach keeps every row exactly where the template put it.
+# Only the DATES written into the Date column change for a mid-week
+# start; the topic sequence (and therefore which row is Friday's Query
+# Resolution) is fixed and untouched. Week numbering is recomputed purely
+# for display purposes, based on the template's own weekend banner rows,
+# without moving anything.
+#
 def merges_touching(
     ws,
     row_start,
     row_end
 ):
     """Find merged ranges touching region."""
-
     return [
         m
         for m in list(ws.merged_cells.ranges)
@@ -828,168 +672,6 @@ def merges_touching(
     ]
 
 
-def _contiguous_runs(nums):
-    """Convert sorted numbers into contiguous runs."""
-
-    runs = []
-    run = []
-
-    for n in nums:
-
-        if (
-            run
-            and n == run[-1] + 1
-        ):
-            run.append(n)
-
-        else:
-
-            if run:
-                runs.append(run)
-
-            run = [n]
-
-    if run:
-        runs.append(run)
-
-    return runs
-
-
-def apply_row_order(
-    ws,
-    region_start,
-    region_end,
-    order
-):
-    """Rewrite schedule region in the new order."""
-
-    ncols = ws.max_column
-
-    snap = {
-        r: [
-            (
-                ws.cell(r, c).value,
-                ws.cell(r, c)._style
-            )
-            for c in range(1, ncols + 1)
-        ]
-        for r in range(
-            region_start,
-            region_end + 1
-        )
-    }
-
-    heights = {
-        r: ws.row_dimensions[r].height
-        for r in range(
-            region_start,
-            region_end + 1
-        )
-    }
-
-    touching = merges_touching(
-        ws,
-        region_start,
-        region_end
-    )
-
-    merge_specs = [
-        (
-            m.min_row,
-            m.min_col,
-            m.max_row,
-            m.max_col,
-            ws.cell(
-                m.min_row,
-                m.min_col
-            ).value
-        )
-        for m in touching
-    ]
-
-    for m in touching:
-        ws.unmerge_cells(str(m))
-
-    pos = {
-        s: region_start + i
-        for i, s in enumerate(order)
-    }
-
-    for s, r in pos.items():
-
-        for c, (
-            v,
-            style
-        ) in enumerate(
-            snap[s],
-            start=1
-        ):
-
-            cell = ws.cell(r, c)
-
-            cell.value = v
-            cell._style = style
-
-        ws.row_dimensions[r].height = heights[s]
-
-    blank_src = {
-        r
-        for r, cells in snap.items()
-        if all(
-            v is None
-            for v, _ in cells
-        )
-    }
-
-    for (
-        r0,
-        c0,
-        r1,
-        c1,
-        anchor_val
-    ) in merge_specs:
-
-        back = {
-            pos.get(r, r): r
-            for r in range(r0, r1 + 1)
-        }
-
-        for run in _contiguous_runs(
-            sorted(back)
-        ):
-
-            a = run[0]
-            b = run[-1]
-
-            if (
-                a != b
-                or c0 != c1
-            ):
-
-                ws.merge_cells(
-                    start_row=a,
-                    start_column=c0,
-                    end_row=b,
-                    end_column=c1
-                )
-
-            if back[a] == r0:
-                continue
-
-            if all(
-                back[x] in blank_src
-                for x in run
-            ):
-                continue
-
-            ws.cell(
-                a,
-                c0
-            ).value = anchor_val
-
-    return pos
-
-
 def renumber_weeks(
     ws,
     data_start,
@@ -997,7 +679,6 @@ def renumber_weeks(
     kind_by_row
 ):
     """Renumber Week No."""
-
     for m in [
         m
         for m in merges_touching(
@@ -1013,14 +694,11 @@ def renumber_weeks(
         ws.unmerge_cells(str(m))
 
     banner_rows = set()
-
     for m in ws.merged_cells.ranges:
-
         if (
             m.min_col == 1
             and m.max_col > 1
         ):
-
             banner_rows.update(
                 range(
                     m.min_row,
@@ -1030,42 +708,31 @@ def renumber_weeks(
 
     blocks = []
     cur = []
-
     for r in range(
         data_start,
         region_end + 1
     ):
-
         if kind_by_row.get(r) == "weekend":
-
             blocks.append(
                 (cur, r)
             )
-
             cur = []
-
         else:
             cur.append(r)
-
     if cur:
         blocks.append(
             (cur, None)
         )
 
     week = 0
-
     for rows, weekend_row in blocks:
-
         if not any(
             kind_by_row.get(r) == "day"
             for r in rows
         ):
             continue
-
         week += 1
-
         for r in rows:
-
             if (
                 r not in banner_rows
                 and not isinstance(
@@ -1074,42 +741,42 @@ def renumber_weeks(
                 )
             ):
                 ws.cell(r, 1).value = None
-
         first = rows[0]
         last = rows[-1]
-
         if (
             weekend_row is not None
             and weekend_row not in banner_rows
         ):
             last = weekend_row
-
         ws.cell(first, 1).value = week
-
         if last > first:
-
             ws.merge_cells(
                 start_row=first,
                 start_column=1,
                 end_row=last,
                 end_column=1
             )
-
     return week
 
 
 def reflow_for_start(
     ws,
     data_start,
-    date_col,
-    pad
+    date_col
 ):
-    """Reflow template rows for a mid-week start."""
+    """
+    Compute week numbering for a (possibly mid-week) start WITHOUT
+    reordering any template rows.
 
+    Topics stay exactly where the template placed them - including
+    whichever row holds the Friday-only Query Resolution topic. Only the
+    Week No labels are (re)computed here, from the template's own
+    weekend banner rows. Actual date stamping (and the Query
+    Resolution Friday-only rule) happens later in fill_dates, driven
+    purely by real calendar weekdays.
+    """
     region_end = last_content_row(ws)
-
     value, span = build_resolvers(ws)
-
     topic_cols = range(
         date_col + 1,
         date_col + 8
@@ -1125,32 +792,8 @@ def reflow_for_start(
         topic_cols
     )
 
-    order = plan_row_order(
-        kind,
-        data_start,
-        region_end,
-        pad
-    )
-
-    if order != list(
-        range(
-            data_start,
-            region_end + 1
-        )
-    ):
-
-        pos = apply_row_order(
-            ws,
-            data_start,
-            region_end,
-            order
-        )
-
-        kind = {
-            pos[r]: k
-            for r, k in kind.items()
-        }
-
+    # Rows are intentionally left in their original template order -
+    # no plan_row_order / apply_row_order style repacking here.
     weeks = renumber_weeks(
         ws,
         data_start,
@@ -1159,15 +802,12 @@ def reflow_for_start(
     )
 
     first_week_days = 0
-
     for r in range(
         data_start,
         region_end + 1
     ):
-
         if kind.get(r) == "weekend":
             break
-
         if kind.get(r) == "day":
             first_week_days += 1
 
@@ -1177,26 +817,21 @@ def reflow_for_start(
 # --------------------------------------------------------------------------- #
 # Holiday banner
 # --------------------------------------------------------------------------- #
-
 def _split_merge_around_row(
     ws,
     m,
     r
 ):
     """Split merge around holiday row."""
-
     r0 = m.min_row
     c0 = m.min_col
     r1 = m.max_row
     c1 = m.max_col
-
     ws.unmerge_cells(str(m))
-
     for a, b in (
         (r0, r - 1),
         (r + 1, r1)
     ):
-
         if (
             b < a
             or (
@@ -1205,7 +840,6 @@ def _split_merge_around_row(
             )
         ):
             continue
-
         ws.merge_cells(
             start_row=a,
             start_column=c0,
@@ -1224,23 +858,19 @@ def mark_holiday_row(
     last_col
 ):
     """Turn a teaching row into a full-width holiday banner."""
-
     for m in list(
         ws.merged_cells.ranges
     ):
-
         if (
             m.max_col < banner_start
             or m.min_col > banner_end
         ):
             continue
-
         if (
             m.max_row < r
             or m.min_row > r
         ):
             continue
-
         _split_merge_around_row(
             ws,
             m,
@@ -1254,7 +884,6 @@ def mark_holiday_row(
         ws.cell(r, c).value = None
 
     if banner_end > banner_start:
-
         ws.merge_cells(
             start_row=r,
             start_column=banner_start,
@@ -1266,11 +895,8 @@ def mark_holiday_row(
         r,
         banner_start
     )
-
     banner.value = f"HOLIDAY - {name}"
-
     banner.font = HOLIDAY_FONT
-
     banner.alignment = Alignment(
         horizontal="center",
         vertical="center",
@@ -1295,7 +921,6 @@ def mark_holiday_row(
 # --------------------------------------------------------------------------- #
 # Date allocation helpers
 # --------------------------------------------------------------------------- #
-
 def next_friday(d):
     """
     Return the Friday on or after date d.
@@ -1308,7 +933,6 @@ def next_friday(d):
     Saturday -> following Friday
     Sunday -> following Friday
     """
-
     return on_or_after(
         d,
         FRIDAY
@@ -1325,13 +949,10 @@ def find_next_regular_weekday(
     This helper deliberately does NOT skip holidays because the caller needs
     to stamp the holiday row and convert it into a holiday banner.
     """
-
     while current.weekday() >= SATURDAY:
-
         current += datetime.timedelta(
             days=1
         )
-
     return current
 
 
@@ -1346,20 +967,17 @@ def clear_query_resolution_date(
     This is important because Query Resolution must not accidentally inherit
     a date from previous logic.
     """
-
     target = target_cell(
         ws,
         r,
         date_col
     )
-
     target.value = None
 
 
 # --------------------------------------------------------------------------- #
 # Date + holiday fill
 # --------------------------------------------------------------------------- #
-
 def fill_dates(
     ws,
     start_date,
@@ -1373,38 +991,41 @@ def fill_dates(
     OFFLINE
     -------
     Normal topics:
-        Monday-Friday.
+        Sequential weekdays (Monday-Friday), starting from start_date and
+        continuing row by row in the template's own order - regardless of
+        which weekday the batch starts on. Real weekends are skipped.
 
     Query Resolution:
-        Friday ONLY.
+        Friday ONLY - wherever its row falls in the template's sequence,
+        it is always pushed forward (never backward) to the next real
+        Friday from the current calendar pointer.
 
-    If Friday is a company holiday:
+    If that Friday is a company holiday:
         - Friday is marked HOLIDAY.
         - Query Resolution does NOT move to Thursday.
         - Query Resolution does NOT move to another weekday.
         - Its date cell remains blank.
 
+    A mid-week start_date simply shifts the calendar pointer that walks
+    down the (unmodified) row sequence - it never changes which row holds
+    which topic.
+
     ONLINE
     ------
     Existing Saturday/Sunday behavior is preserved.
     """
-
     value, span = build_resolvers(ws)
-
     topic_cols = range(
         date_col + 1,
         date_col + 8
     )
 
     current = start_date
-
     marked = 0
     last_stamped = None
 
     data_start = first_data_row(ws)
-
     header_row = data_start - 1
-
     tl_col = (
         find_theory_lab_column(
             ws,
@@ -1416,9 +1037,7 @@ def fill_dates(
 
     note_col = ws.max_column + 1
     last_col = note_col
-
     banner_start = date_col + 1
-
     banner_end = weekend_banner_end(
         ws,
         data_start,
@@ -1426,7 +1045,6 @@ def fill_dates(
         value,
         date_col
     )
-
     if banner_end < banner_start:
         banner_end = note_col - 1
 
@@ -1436,57 +1054,45 @@ def fill_dates(
     ).value = "Remarks"
 
     # ------------------------------------------------------------------ #
-    # Walk through all schedule rows
+    # Walk through all schedule rows, in the template's own fixed order.
     # ------------------------------------------------------------------ #
-
     for r in range(
         data_start,
         ws.max_row + 1
     ):
-
         # -------------------------------------------------------------- #
         # ONLINE COURSE BREAK
         # -------------------------------------------------------------- #
-
         if online:
-
             handled, resume_from = fill_course_break(
                 ws,
                 r,
                 last_stamped,
                 current
             )
-
             if handled:
-
                 if resume_from is not None:
-
                     current = resume_from
                     last_stamped = None
-
                 continue
 
         # -------------------------------------------------------------- #
         # OFFLINE WEEKEND BANNER
         # -------------------------------------------------------------- #
-
         elif is_weekend_row(
             value,
             r,
             date_col
         ):
-
             current = on_or_after(
                 current,
                 MONDAY
             )
-
             continue
 
         # -------------------------------------------------------------- #
         # Ignore non-teaching rows
         # -------------------------------------------------------------- #
-
         if not is_day_row(
             ws,
             value,
@@ -1500,55 +1106,42 @@ def fill_dates(
         # -------------------------------------------------------------- #
         # ONLINE DATE LOGIC
         # -------------------------------------------------------------- #
-
         if online:
-
             want = session_weekday(
                 ws,
                 value,
                 r,
                 tl_col
             )
-
             if want is not None:
-
                 current = on_or_after(
                     current,
                     want
                 )
-
             else:
-
                 while current.weekday() < SATURDAY:
-
                     current += datetime.timedelta(
                         days=1
                     )
-
             set_cell(
                 ws,
                 r,
                 date_col,
                 current
             )
-
             ws.cell(
                 r,
                 date_col
             ).number_format = "m/d/yyyy"
-
             last_stamped = current
-
             current += datetime.timedelta(
                 days=1
             )
-
             continue
 
         # ============================================================== #
         # OFFLINE LOGIC
         # ============================================================== #
-
         query_resolution = is_query_resolution_row(
             ws,
             r,
@@ -1560,10 +1153,11 @@ def fill_dates(
         # QUERY RESOLUTION
         # -------------------------------------------------------------- #
         #
-        # This is the critical new rule.
+        # This is the critical rule.
         #
         # Regardless of whether the batch started Monday, Tuesday,
-        # Wednesday or Thursday, Query Resolution waits for Friday.
+        # Wednesday or Thursday, and regardless of the row's position in
+        # the template, Query Resolution waits for Friday.
         #
         # Example:
         #
@@ -1578,11 +1172,10 @@ def fill_dates(
         # Friday    -> HOLIDAY
         # Query Resolution -> no date
         #
-        # It is NEVER moved to Thursday.
+        # It is NEVER moved to Thursday, and its row is NEVER moved to a
+        # different position in the sheet.
         # -------------------------------------------------------------- #
-
         if query_resolution:
-
             friday = next_friday(current)
 
             # If the calculated Friday is before the current date due to
@@ -1595,13 +1188,11 @@ def fill_dates(
             # If the Friday is a company holiday, the Friday remains a
             # holiday. Query Resolution is deliberately left undated.
             if friday in holidays:
-
                 clear_query_resolution_date(
                     ws,
                     r,
                     date_col
                 )
-
                 mark_holiday_row(
                     ws,
                     r,
@@ -1611,17 +1202,14 @@ def fill_dates(
                     note_col,
                     last_col
                 )
-
                 marked += 1
-
-                # Do NOT move Query Resolution to Thursday.
-                #
-                # Move the calendar pointer beyond this Friday so subsequent
-                # topics continue from the next available working period.
+                # Do NOT move Query Resolution to Thursday, and do NOT
+                # move its row. Just move the calendar pointer beyond
+                # this Friday so subsequent topics (in their existing
+                # rows) continue from the next available working period.
                 current = friday + datetime.timedelta(
                     days=1
                 )
-
                 continue
 
             # Friday is available.
@@ -1631,42 +1219,34 @@ def fill_dates(
                 date_col,
                 friday
             )
-
             ws.cell(
                 r,
                 date_col
             ).number_format = "m/d/yyyy"
-
             last_stamped = friday
-
             # Continue after Friday.
             current = friday + datetime.timedelta(
                 days=1
             )
-
             continue
 
         # -------------------------------------------------------------- #
         # NORMAL OFFLINE TOPIC
         # -------------------------------------------------------------- #
-
         current = find_next_regular_weekday(
             current,
             holidays
         )
-
         set_cell(
             ws,
             r,
             date_col,
             current
         )
-
         ws.cell(
             r,
             date_col
         ).number_format = "m/d/yyyy"
-
         last_stamped = current
 
         # Company holiday handling.
@@ -1674,7 +1254,6 @@ def fill_dates(
         # The date is first assigned and then converted to a full-width
         # holiday banner, preserving the existing behavior.
         if current in holidays:
-
             mark_holiday_row(
                 ws,
                 r,
@@ -1684,7 +1263,6 @@ def fill_dates(
                 note_col,
                 last_col
             )
-
             marked += 1
 
         current += datetime.timedelta(
@@ -1697,7 +1275,6 @@ def fill_dates(
 # --------------------------------------------------------------------------- #
 # Weekend banner helper
 # --------------------------------------------------------------------------- #
-
 def weekend_banner_end(
     ws,
     data_start,
@@ -1708,42 +1285,33 @@ def weekend_banner_end(
     """
     Determine the last column used by the weekend banner.
     """
-
     end = 0
-
     for r in range(
         data_start,
         region_end + 1
     ):
-
         if not is_weekend_row(
             value,
             r,
             date_col
         ):
             continue
-
         for m in ws.merged_cells.ranges:
-
             if (
                 m.min_row == r
                 and m.min_col <= date_col <= m.max_col
             ):
-
                 end = max(
                     end,
                     m.max_col
                 )
-
     return end
 
 
 # --------------------------------------------------------------------------- #
 # Main
 # --------------------------------------------------------------------------- #
-
 def main():
-
     cfg = json.load(
         sys.stdin
     )
@@ -1752,22 +1320,18 @@ def main():
         "batch_type",
         ""
     )
-
     online = (
         batch_type.strip().lower()
         == "online"
     )
 
     try:
-
         template = find_template(
             cfg["template_dir"],
             cfg["domain"],
             batch_type
         )
-
     except FileNotFoundError as e:
-
         sys.exit(str(e))
 
     holidays = load_holidays(
@@ -1777,22 +1341,17 @@ def main():
     start = cfg.get(
         "start_date"
     )
-
     if start:
-
         start_date = datetime.datetime.strptime(
             start,
             "%Y-%m-%d"
         ).date()
-
     else:
-
         start_date = None
 
     wb = openpyxl.load_workbook(
         template
     )
-
     ws = wb.active
 
     fill_metadata(
@@ -1805,40 +1364,38 @@ def main():
     first_week_days = 0
 
     if start_date:
-
         data_start = first_data_row(
             ws
         )
-
         date_col = find_date_column(
             ws,
             data_start
         )
 
         if not online:
-
             # ---------------------------------------------------------- #
             # Offline batches cannot start Saturday/Sunday.
             # ---------------------------------------------------------- #
-
             if start_date.weekday() >= SATURDAY:
-
                 start_date = on_or_after(
                     start_date,
                     MONDAY
                 )
 
             # ---------------------------------------------------------- #
-            # Re-flow for mid-week starts.
+            # Recompute Week No labels for the (possibly mid-week) start.
+            #
+            # Rows are NEVER re-ordered here - a Monday start therefore
+            # follows the template exactly as authored, and a mid-week
+            # start (Tue/Wed/Thu/Fri) only changes the dates that get
+            # stamped in fill_dates() below. The topic in every row -
+            # including whichever row holds the Friday-only Query
+            # Resolution topic - stays exactly where the template put it.
             # ---------------------------------------------------------- #
-
-            pad = start_date.weekday()
-
             weeks, first_week_days = reflow_for_start(
                 ws,
                 data_start,
-                date_col,
-                pad
+                date_col
             )
 
         holidays_marked = fill_dates(
@@ -1850,7 +1407,6 @@ def main():
         )
 
     out_path = cfg["out_path"]
-
     wb.save(
         out_path
     )
