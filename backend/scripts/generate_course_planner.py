@@ -2,11 +2,9 @@
 Course Planner Generator
 ========================
 Fills a domain-specific Course Planner template into an .xlsx file.
-
 IMPORTANT COURSE RULE
 ---------------------
 "Query Resolution" is a Friday-only topic for OFFLINE batches.
-
 If Query Resolution occurs in a week's topic sequence:
     - It can only receive that week's Friday date.
     - It must NEVER be moved to Monday-Thursday.
@@ -14,7 +12,6 @@ If Query Resolution occurs in a week's topic sequence:
     - Query Resolution is NOT moved to Thursday or another weekday.
     - The topic remains without a teaching date rather than violating the
       Friday-only rule.
-
 FRIDAY RESERVATION (mid-week starts)
 -------------------------------------
 A week's Friday is reserved for its Query Resolution row as soon as that
@@ -23,14 +20,30 @@ two weekend banners). Normal (non-Query-Resolution) topics are never
 allowed to land on that reserved Friday - if the day-by-day walk would
 put a normal topic there, that topic rolls forward to the next Monday
 instead, and Query Resolution still gets that week's Friday.
-
 Without this reservation, a mid-week start (e.g. batch starting on a
 Tuesday) can cause an ordinary topic to consume the week's real Friday
 before the Query Resolution row is reached, which then forces Query
 Resolution to jump to the FOLLOWING week's Friday - silently skipping an
 entire week and shifting every subsequent date in the planner by one
 week. The reservation logic below prevents that.
-
+WEEKEND-BANNER ADVANCE (bugfix)
+--------------------------------
+When a normal topic overflows past a week's reserved Friday (because a
+mid-week start left fewer than the usual number of weekdays available
+before that Friday), it rolls forward to the following Monday. That
+means `current` can already be sitting on a weekday LATER than the
+week's own Monday (e.g. a Tuesday) by the time the day-by-day walk
+reaches that week's weekend-banner row.
+The banner-row handler must therefore only skip an ACTUAL Saturday or
+Sunday it lands on - it must never unconditionally jump to "the next
+occurrence of Monday", because if `current` is already a valid mid-week
+weekday, jumping to the next Monday overshoots by an entire week and
+silently skips several real teaching days (this was the bug: dates like
+9/15-9/18 disappearing and the planner jumping straight to 9/21).
+Using the same "skip only if actually Saturday/Sunday" helper that is
+used for normal topics (`find_next_regular_weekday`) fixes this: it
+leaves an already-valid weekday untouched and only advances past a real
+weekend.
 MID-WEEK START RULE
 --------------------
 - If the batch starts on Monday, the planner follows the template exactly
@@ -45,24 +58,20 @@ MID-WEEK START RULE
   exactly where the template put them, row for row.
 - Query Resolution keeps landing only on an actual Friday (enforced in
   fill_dates below), regardless of which weekday the batch started on.
-
 All existing weekend, holiday, Online-batch, metadata and template handling
 is preserved.
 """
-
 import datetime
 import glob
 import json
 import os
 import re
 import sys
-
 # Prefer the vendored openpyxl/et_xmlfile shipped in ./vendor.
 sys.path.insert(
     0,
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "vendor")
 )
-
 try:
     import openpyxl
     from openpyxl.styles import PatternFill, Font, Alignment
@@ -71,7 +80,6 @@ except ImportError:
     sys.exit(
         "openpyxl is required. Install it with: pip install openpyxl"
     )
-
 # --------------------------------------------------------------------------- #
 # Constants
 # --------------------------------------------------------------------------- #
@@ -84,29 +92,22 @@ HOLIDAY_FONT = Font(
     bold=True,
     color="FFC00000"
 )
-
 TOPIC_COLS = range(3, 10)       # C..I
 DATE_COL = 2                    # B
-
 WEEKEND_RE = re.compile(
     r"weekend|saturday\s*&\s*sunday",
     re.I
 )
-
 MONDAY = 0
 FRIDAY = 4
 SATURDAY = 5
 SUNDAY = 6
-
 TEACHING_DAYS_PER_WEEK = 5
-
 # Query Resolution is a Friday-only topic.
 QUERY_RESOLUTION_RE = re.compile(
     r"\bquery\s*resolution\b",
     re.I
 )
-
-
 # --------------------------------------------------------------------------- #
 # Template discovery
 # --------------------------------------------------------------------------- #
@@ -114,17 +115,14 @@ def find_template(template_dir, domain, batch_type=""):
     """Pick the template workbook for the chosen domain + batch type."""
     dom = domain.strip().lower()
     bt = (batch_type or "").strip().lower()
-
     candidates = sorted(
         glob.glob(os.path.join(template_dir, "*.xlsx"))
     )
-
     def domain_ok(name):
         return re.search(
             rf"\b{re.escape(dom)}\b",
             name
         ) is not None
-
     # 1) Preferred template
     if bt:
         for path in candidates:
@@ -135,7 +133,6 @@ def find_template(template_dir, domain, batch_type=""):
                 and domain_ok(name)
             ):
                 return path
-
     # 2) Backward compatible search
     for path in candidates:
         name = os.path.basename(path).lower()
@@ -145,7 +142,6 @@ def find_template(template_dir, domain, batch_type=""):
             and (not bt or name.startswith(bt))
         ):
             return path
-
     # 3) Loosest fallback
     for path in candidates:
         name = os.path.basename(path).lower()
@@ -155,7 +151,6 @@ def find_template(template_dir, domain, batch_type=""):
             and (not bt or name.startswith(bt))
         ):
             return path
-
     available = sorted(
         os.path.basename(p)
         for p in candidates
@@ -168,8 +163,6 @@ def find_template(template_dir, domain, batch_type=""):
         f'{domain} Course Planner Template.xlsx". '
         f"Templates found: {', '.join(available) or 'none'}"
     )
-
-
 # --------------------------------------------------------------------------- #
 # Header helpers
 # --------------------------------------------------------------------------- #
@@ -180,8 +173,6 @@ def _header_text(v):
         if isinstance(v, str)
         else ""
     )
-
-
 def find_header_column(ws, data_start, names, default=0):
     """Locate a column by its header label."""
     limit = min(
@@ -193,8 +184,6 @@ def find_header_column(ws, data_start, names, default=0):
             if _header_text(ws.cell(r, c).value) in names:
                 return c
     return default
-
-
 def find_date_column(ws, data_start):
     """Locate Date column."""
     return find_header_column(
@@ -203,8 +192,6 @@ def find_date_column(ws, data_start):
         {"date"},
         DATE_COL
     )
-
-
 def find_theory_lab_column(ws, data_start):
     """Locate Theory/Lab column."""
     return find_header_column(
@@ -213,8 +200,6 @@ def find_theory_lab_column(ws, data_start):
         {"theory/lab", "theory / lab"},
         0
     )
-
-
 def session_weekday(ws, value, r, tl_col):
     """Return weekend day for Online Theory/Lab rows."""
     if not tl_col:
@@ -225,8 +210,6 @@ def session_weekday(ws, value, r, tl_col):
     if t.startswith("lab"):
         return SUNDAY
     return None
-
-
 # --------------------------------------------------------------------------- #
 # Date helpers
 # --------------------------------------------------------------------------- #
@@ -235,8 +218,6 @@ def on_or_after(d, weekday):
     return d + datetime.timedelta(
         days=(weekday - d.weekday()) % 7
     )
-
-
 def weekend_of(d):
     """Return Saturday/Sunday for the weekend containing d."""
     wd = d.weekday()
@@ -248,8 +229,6 @@ def weekend_of(d):
         days=(SATURDAY - wd)
     )
     return sat, sat + datetime.timedelta(days=1)
-
-
 def next_weekend_after(d):
     """Return the weekend following d's weekend."""
     sat, sun = weekend_of(d)
@@ -257,8 +236,6 @@ def next_weekend_after(d):
         sat + datetime.timedelta(days=7),
         sun + datetime.timedelta(days=7)
     )
-
-
 # --------------------------------------------------------------------------- #
 # Course break
 # --------------------------------------------------------------------------- #
@@ -282,8 +259,6 @@ def fill_course_break(ws, r, last_stamped, current):
             )
             return True, sun + datetime.timedelta(days=1)
     return False, None
-
-
 # --------------------------------------------------------------------------- #
 # Holiday list
 # --------------------------------------------------------------------------- #
@@ -298,13 +273,11 @@ def load_holidays(holiday_file):
     holidays = {}
     if not holiday_file or not os.path.exists(holiday_file):
         return holidays
-
     wb = openpyxl.load_workbook(
         holiday_file,
         data_only=True
     )
     ws = wb.active
-
     header = {
         str(ws.cell(1, c).value).strip().lower(): c
         for c in range(1, ws.max_column + 1)
@@ -313,7 +286,6 @@ def load_holidays(holiday_file):
     date_c = header.get("date", 1)
     name_c = header.get("holiday", 3)
     type_c = header.get("type of holiday", 4)
-
     for r in range(2, ws.max_row + 1):
         d = ws.cell(r, date_c).value
         t = ws.cell(r, type_c).value
@@ -326,8 +298,6 @@ def load_holidays(holiday_file):
                 ws.cell(r, name_c).value or "Holiday"
             ).strip()
     return holidays
-
-
 # --------------------------------------------------------------------------- #
 # Merge-aware helpers
 # --------------------------------------------------------------------------- #
@@ -346,7 +316,6 @@ def build_resolvers(ws):
                 width[(r, c)] = (
                     m.max_col - m.min_col
                 )
-
     value = lambda r, c: anchor.get(
         (r, c),
         ws.cell(r, c).value
@@ -356,8 +325,6 @@ def build_resolvers(ws):
         0
     )
     return value, span
-
-
 def target_cell(ws, r, c):
     """Return writable cell for a possibly merged location."""
     for m in ws.merged_cells.ranges:
@@ -370,13 +337,9 @@ def target_cell(ws, r, c):
                 m.min_col
             )
     return ws.cell(r, c)
-
-
 def set_cell(ws, r, c, val):
     """Write to a cell respecting merges."""
     target_cell(ws, r, c).value = val
-
-
 # --------------------------------------------------------------------------- #
 # Metadata
 # --------------------------------------------------------------------------- #
@@ -388,13 +351,11 @@ def fill_metadata(ws, cfg):
     batch = cfg["batch_no"]
     dom = cfg["domain"]
     lab = cfg.get("lab_timings", "")
-
     for row in ws.iter_rows():
         for cell in row:
             v = cell.value
             if not isinstance(v, str):
                 continue
-
             new = v
             new = new.replace(
                 "(batch_no)",
@@ -432,7 +393,6 @@ def fill_metadata(ws, cfg):
                     rf"\g<1> {s3}",
                     new
                 )
-
             low = v.lower()
             if (
                 low.strip().rstrip(":") == "domain"
@@ -450,7 +410,6 @@ def fill_metadata(ws, cfg):
                 and lab not in v
             ):
                 new = f"{v.rstrip()}\n{lab}"
-
             if (
                 s1
                 and re.match(
@@ -490,11 +449,8 @@ def fill_metadata(ws, cfg):
                     new,
                     flags=re.I | re.S
                 )
-
             if new != v:
                 cell.value = new
-
-
 # --------------------------------------------------------------------------- #
 # Row detection
 # --------------------------------------------------------------------------- #
@@ -515,8 +471,6 @@ def first_data_row(ws):
         ),
         5
     )
-
-
 def last_content_row(ws):
     """Find last row containing content."""
     for r in range(ws.max_row, 0, -1):
@@ -526,8 +480,6 @@ def last_content_row(ws):
         ):
             return r
     return ws.max_row
-
-
 def is_weekend_row(value, r, date_col):
     """Detect weekend banner row."""
     v = value(r, date_col)
@@ -535,18 +487,14 @@ def is_weekend_row(value, r, date_col):
         isinstance(v, str)
         and bool(WEEKEND_RE.search(v))
     )
-
-
 # --------------------------------------------------------------------------- #
 # Query Resolution detection
 # --------------------------------------------------------------------------- #
 def row_contains_query_resolution(ws, r, topic_cols):
     """
     Detect whether a schedule row contains Query Resolution.
-
     Detection is case-insensitive and scans all topic columns belonging
     to that row.
-
     Examples detected:
         Query Resolution
         query resolution
@@ -561,8 +509,6 @@ def row_contains_query_resolution(ws, r, topic_cols):
         if QUERY_RESOLUTION_RE.search(text):
             return True
     return False
-
-
 def is_query_resolution_row(
     ws,
     r,
@@ -571,7 +517,6 @@ def is_query_resolution_row(
 ):
     """
     Return True if this row represents Query Resolution.
-
     This function intentionally checks RAW topic cells instead of the
     merge-resolved values, preventing inherited module text from causing
     false positives.
@@ -581,8 +526,6 @@ def is_query_resolution_row(
         r,
         topic_cols
     )
-
-
 def block_has_query_resolution(
     ws,
     start_r,
@@ -594,7 +537,6 @@ def block_has_query_resolution(
     Look ahead from start_r to see whether the CURRENT week-block (the
     run of rows up to, but not including, the next weekend banner row)
     contains a Query Resolution row.
-
     This is a pure lookahead - it does not stamp or modify anything. It
     is used so that, before any normal topic in the block is dated, we
     already know whether that week's Friday needs to be reserved for
@@ -617,8 +559,6 @@ def block_has_query_resolution(
             return True
         r += 1
     return False
-
-
 # --------------------------------------------------------------------------- #
 # Row classification
 # --------------------------------------------------------------------------- #
@@ -650,8 +590,6 @@ def is_day_row(
         ):
             return True
     return False
-
-
 def classify_rows(
     ws,
     value,
@@ -685,8 +623,6 @@ def classify_rows(
         else:
             kind[r] = "other"
     return kind
-
-
 # --------------------------------------------------------------------------- #
 # Week numbering (fixed template order - rows are NEVER re-ordered)
 # --------------------------------------------------------------------------- #
@@ -722,8 +658,6 @@ def merges_touching(
             and m.min_row <= row_end
         )
     ]
-
-
 def renumber_weeks(
     ws,
     data_start,
@@ -744,7 +678,6 @@ def renumber_weeks(
         )
     ]:
         ws.unmerge_cells(str(m))
-
     banner_rows = set()
     for m in ws.merged_cells.ranges:
         if (
@@ -757,7 +690,6 @@ def renumber_weeks(
                     m.max_row + 1
                 )
             )
-
     blocks = []
     cur = []
     for r in range(
@@ -775,7 +707,6 @@ def renumber_weeks(
         blocks.append(
             (cur, None)
         )
-
     week = 0
     for rows, weekend_row in blocks:
         if not any(
@@ -809,8 +740,6 @@ def renumber_weeks(
                 end_column=1
             )
     return week
-
-
 def reflow_for_start(
     ws,
     data_start,
@@ -819,7 +748,6 @@ def reflow_for_start(
     """
     Compute week numbering for a (possibly mid-week) start WITHOUT
     reordering any template rows.
-
     Topics stay exactly where the template placed them - including
     whichever row holds the Friday-only Query Resolution topic. Only the
     Week No labels are (re)computed here, from the template's own
@@ -833,7 +761,6 @@ def reflow_for_start(
         date_col + 1,
         date_col + 8
     )
-
     kind = classify_rows(
         ws,
         value,
@@ -843,7 +770,6 @@ def reflow_for_start(
         date_col,
         topic_cols
     )
-
     # Rows are intentionally left in their original template order -
     # no plan_row_order / apply_row_order style repacking here.
     weeks = renumber_weeks(
@@ -852,7 +778,6 @@ def reflow_for_start(
         region_end,
         kind
     )
-
     first_week_days = 0
     for r in range(
         data_start,
@@ -862,10 +787,7 @@ def reflow_for_start(
             break
         if kind.get(r) == "day":
             first_week_days += 1
-
     return weeks, first_week_days
-
-
 # --------------------------------------------------------------------------- #
 # Holiday banner
 # --------------------------------------------------------------------------- #
@@ -898,8 +820,6 @@ def _split_merge_around_row(
             end_row=b,
             end_column=c1
         )
-
-
 def mark_holiday_row(
     ws,
     r,
@@ -928,13 +848,11 @@ def mark_holiday_row(
             m,
             r
         )
-
     for c in range(
         banner_start,
         banner_end + 1
     ):
         ws.cell(r, c).value = None
-
     if banner_end > banner_start:
         ws.merge_cells(
             start_row=r,
@@ -942,7 +860,6 @@ def mark_holiday_row(
             end_row=r,
             end_column=banner_end
         )
-
     banner = ws.cell(
         r,
         banner_start
@@ -954,12 +871,10 @@ def mark_holiday_row(
         vertical="center",
         wrap_text=True
     )
-
     ws.cell(
         r,
         note_col
     ).value = f"Holiday - {name}"
-
     for c in range(
         1,
         last_col + 1
@@ -968,15 +883,12 @@ def mark_holiday_row(
             r,
             c
         ).fill = HOLIDAY_FILL
-
-
 # --------------------------------------------------------------------------- #
 # Date allocation helpers
 # --------------------------------------------------------------------------- #
 def next_friday(d):
     """
     Return the Friday on or after date d.
-
     Monday -> Friday
     Tuesday -> Friday
     Wednesday -> Friday
@@ -989,25 +901,29 @@ def next_friday(d):
         d,
         FRIDAY
     )
-
-
 def find_next_regular_weekday(
     current,
     holidays
 ):
     """
-    Existing normal offline-date behavior.
-
+    Skip forward past an actual Saturday/Sunday only - never jump ahead
+    to "the next occurrence" of a particular weekday if `current` is
+    already sitting on a valid Monday-Friday date.
     This helper deliberately does NOT skip holidays because the caller needs
     to stamp the holiday row and convert it into a holiday banner.
+    IMPORTANT: this is also reused for the weekend-banner-row advance in
+    fill_dates(). Using a "skip only if actually Sat/Sun" rule there
+    (instead of forcing current to the next Monday unconditionally) is
+    what prevents an entire week from being silently skipped when a
+    mid-week start has already pushed `current` onto a later weekday
+    (e.g. Tuesday of the following week) before the banner row is
+    reached.
     """
     while current.weekday() >= SATURDAY:
         current += datetime.timedelta(
             days=1
         )
     return current
-
-
 def clear_query_resolution_date(
     ws,
     r,
@@ -1015,7 +931,6 @@ def clear_query_resolution_date(
 ):
     """
     Explicitly keep Query Resolution undated when its Friday is unavailable.
-
     This is important because Query Resolution must not accidentally inherit
     a date from previous logic.
     """
@@ -1025,8 +940,6 @@ def clear_query_resolution_date(
         date_col
     )
     target.value = None
-
-
 # --------------------------------------------------------------------------- #
 # Date + holiday fill
 # --------------------------------------------------------------------------- #
@@ -1039,29 +952,31 @@ def fill_dates(
 ):
     """
     Stamp dates down the day rows and mark holidays.
-
     OFFLINE
     -------
     Normal topics:
         Sequential weekdays (Monday-Friday), starting from start_date and
         continuing row by row in the template's own order - regardless of
         which weekday the batch starts on. Real weekends are skipped.
-
     Query Resolution:
         Friday ONLY - wherever its row falls in the template's sequence,
         it is always pushed forward (never backward) to the next real
         Friday from the current calendar pointer.
-
     If that Friday is a company holiday:
         - Friday is marked HOLIDAY.
         - Query Resolution does NOT move to Thursday.
         - Query Resolution does NOT move to another weekday.
         - Its date cell remains blank.
-
     A mid-week start_date simply shifts the calendar pointer that walks
     down the (unmodified) row sequence - it never changes which row holds
     which topic.
-
+    Weekend-banner rows only ever skip an ACTUAL Saturday/Sunday that
+    `current` has landed on - they never force `current` forward to "the
+    next Monday" unconditionally. This matters because a normal topic
+    that overflowed past a reserved Friday (mid-week start) can leave
+    `current` already sitting on a valid weekday (e.g. Tuesday) of the
+    following week by the time the banner row is reached; forcing a jump
+    to the next Monday in that situation would skip an entire extra week.
     ONLINE
     ------
     Existing Saturday/Sunday behavior is preserved.
@@ -1071,11 +986,9 @@ def fill_dates(
         date_col + 1,
         date_col + 8
     )
-
     current = start_date
     marked = 0
     last_stamped = None
-
     # Friday-reservation state (OFFLINE only). `pending_friday_reserve`
     # holds the date that the CURRENT week-block's Query Resolution row
     # is entitled to - computed once, as soon as we enter a new block,
@@ -1084,7 +997,6 @@ def fill_dates(
     # still owed for the block we're currently walking through.
     pending_friday_reserve = None
     need_block_scan = True
-
     data_start = first_data_row(ws)
     header_row = data_start - 1
     tl_col = (
@@ -1095,7 +1007,6 @@ def fill_dates(
         if online
         else 0
     )
-
     note_col = ws.max_column + 1
     last_col = note_col
     banner_start = date_col + 1
@@ -1108,12 +1019,10 @@ def fill_dates(
     )
     if banner_end < banner_start:
         banner_end = note_col - 1
-
     ws.cell(
         header_row,
         note_col
     ).value = "Remarks"
-
     # ------------------------------------------------------------------ #
     # Walk through all schedule rows, in the template's own fixed order.
     # ------------------------------------------------------------------ #
@@ -1136,7 +1045,6 @@ def fill_dates(
                     current = resume_from
                     last_stamped = None
                 continue
-
         # -------------------------------------------------------------- #
         # OFFLINE WEEKEND BANNER
         # -------------------------------------------------------------- #
@@ -1145,9 +1053,18 @@ def fill_dates(
             r,
             date_col
         ):
-            current = on_or_after(
+            # BUGFIX: only skip forward past an ACTUAL Saturday/Sunday
+            # that `current` has landed on. Do NOT force `current` to
+            # "the next occurrence of Monday" unconditionally (that was
+            # the old `on_or_after(current, MONDAY)` call) - if `current`
+            # is already a valid mid-week weekday (because an earlier
+            # normal topic in this block overflowed past a reserved
+            # Friday and rolled onto the following Monday), jumping to
+            # the *next* Monday overshoots by an entire week and
+            # silently skips several real teaching days.
+            current = find_next_regular_weekday(
                 current,
-                MONDAY
+                holidays
             )
             # A new week-block starts after this banner - any Friday
             # reservation from the previous block is done, and the next
@@ -1155,7 +1072,6 @@ def fill_dates(
             pending_friday_reserve = None
             need_block_scan = True
             continue
-
         # -------------------------------------------------------------- #
         # Ignore non-teaching rows
         # -------------------------------------------------------------- #
@@ -1168,7 +1084,6 @@ def fill_dates(
             topic_cols
         ):
             continue
-
         # -------------------------------------------------------------- #
         # ONLINE DATE LOGIC
         # -------------------------------------------------------------- #
@@ -1204,11 +1119,9 @@ def fill_dates(
                 days=1
             )
             continue
-
         # ============================================================== #
         # OFFLINE LOGIC
         # ============================================================== #
-
         # -------------------------------------------------------------- #
         # Reserve this week-block's Friday for Query Resolution, BEFORE
         # any normal topic in the block gets a date. This is computed
@@ -1228,14 +1141,12 @@ def fill_dates(
             else:
                 pending_friday_reserve = None
             need_block_scan = False
-
         query_resolution = is_query_resolution_row(
             ws,
             r,
             date_col,
             topic_cols
         )
-
         # -------------------------------------------------------------- #
         # QUERY RESOLUTION
         # -------------------------------------------------------------- #
@@ -1272,14 +1183,12 @@ def fill_dates(
                 if pending_friday_reserve is not None
                 else next_friday(current)
             )
-
             # If the calculated Friday is before the current date due to
             # unusual input, protect against accidental backwards dates.
             if friday < current and pending_friday_reserve is None:
                 friday += datetime.timedelta(
                     days=7
                 )
-
             # If the Friday is a company holiday, the Friday remains a
             # holiday. Query Resolution is deliberately left undated.
             if friday in holidays:
@@ -1308,7 +1217,6 @@ def fill_dates(
                 )
                 pending_friday_reserve = None
                 continue
-
             # Friday is available.
             set_cell(
                 ws,
@@ -1333,7 +1241,6 @@ def fill_dates(
             )
             pending_friday_reserve = None
             continue
-
         # -------------------------------------------------------------- #
         # NORMAL OFFLINE TOPIC
         # -------------------------------------------------------------- #
@@ -1341,7 +1248,6 @@ def fill_dates(
             current,
             holidays
         )
-
         # This week's Friday belongs to Query Resolution (reserved
         # above) - a normal topic must never be dated onto it. If the
         # sequential walk would otherwise land here, roll forward to the
@@ -1360,7 +1266,6 @@ def fill_dates(
                 current,
                 holidays
             )
-
         set_cell(
             ws,
             r,
@@ -1372,7 +1277,6 @@ def fill_dates(
             date_col
         ).number_format = "m/d/yyyy"
         last_stamped = current
-
         # Company holiday handling.
         #
         # The date is first assigned and then converted to a full-width
@@ -1388,14 +1292,10 @@ def fill_dates(
                 last_col
             )
             marked += 1
-
         current += datetime.timedelta(
             days=1
         )
-
     return marked
-
-
 # --------------------------------------------------------------------------- #
 # Weekend banner helper
 # --------------------------------------------------------------------------- #
@@ -1430,8 +1330,6 @@ def weekend_banner_end(
                     m.max_col
                 )
     return end
-
-
 # --------------------------------------------------------------------------- #
 # Main
 # --------------------------------------------------------------------------- #
@@ -1439,7 +1337,6 @@ def main():
     cfg = json.load(
         sys.stdin
     )
-
     batch_type = cfg.get(
         "batch_type",
         ""
@@ -1448,7 +1345,6 @@ def main():
         batch_type.strip().lower()
         == "online"
     )
-
     try:
         template = find_template(
             cfg["template_dir"],
@@ -1457,11 +1353,9 @@ def main():
         )
     except FileNotFoundError as e:
         sys.exit(str(e))
-
     holidays = load_holidays(
         cfg.get("holiday_file")
     )
-
     start = cfg.get(
         "start_date"
     )
@@ -1472,21 +1366,17 @@ def main():
         ).date()
     else:
         start_date = None
-
     wb = openpyxl.load_workbook(
         template
     )
     ws = wb.active
-
     fill_metadata(
         ws,
         cfg
     )
-
     holidays_marked = 0
     weeks = 0
     first_week_days = 0
-
     if start_date:
         data_start = first_data_row(
             ws
@@ -1495,7 +1385,6 @@ def main():
             ws,
             data_start
         )
-
         if not online:
             # ---------------------------------------------------------- #
             # Offline batches cannot start Saturday/Sunday.
@@ -1505,7 +1394,6 @@ def main():
                     start_date,
                     MONDAY
                 )
-
             # ---------------------------------------------------------- #
             # Recompute Week No labels for the (possibly mid-week) start.
             #
@@ -1521,7 +1409,6 @@ def main():
                 data_start,
                 date_col
             )
-
         holidays_marked = fill_dates(
             ws,
             start_date,
@@ -1529,12 +1416,10 @@ def main():
             date_col,
             online
         )
-
     out_path = cfg["out_path"]
     wb.save(
         out_path
     )
-
     print(
         json.dumps(
             {
@@ -1562,7 +1447,5 @@ def main():
             }
         )
     )
-
-
 if __name__ == "__main__":
     main()
