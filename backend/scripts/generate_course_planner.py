@@ -1375,6 +1375,25 @@ def mark_holiday_row(
             c
         ).fill = HOLIDAY_FILL
 
+def clear_query_resolution_date(
+    ws,
+    r,
+    date_col
+):
+    """
+    Explicitly keep Query Resolution undated when its Friday
+    is unavailable because of a company holiday.
+
+    Query Resolution is Friday-only and must never be moved
+    to Thursday or another weekday.
+    """
+    target = target_cell(
+        ws,
+        r,
+        date_col
+    )
+    target.value = None
+
 
 # --------------------------------------------------------------------------- #
 # OFFLINE WEEK BLOCK HELPERS
