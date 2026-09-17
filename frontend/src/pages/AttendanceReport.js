@@ -19,7 +19,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { isInactiveLearnerStatus } from "../utils/learnerStatus";
 
-const API_BASE = process.env.REACT_APP_API_URL || "https://engg-automation-f191.onrender.com";
+const API_BASE = process.env.REACT_APP_API_URL || "http://192.168.1.2:5000/";
 
 // Each teaching day has 3 sessions. A learner is "present" for a day when they
 // attended at least 2 of the 3 sessions (1 session present = day absent).

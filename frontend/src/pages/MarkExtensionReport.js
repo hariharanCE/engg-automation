@@ -27,7 +27,7 @@ import {
 } from "@mui/icons-material";
 
 const API_BASE =
-  process.env.REACT_APP_API_URL || "https://engg-automation-f191.onrender.com";
+  process.env.REACT_APP_API_URL || "http://192.168.1.2:5000/";
 
 // Admin / Manager / Coordinator review mark-entry extension requests raised by
 // trainers. Approving opens the window for that assessment until 11:59 PM of the

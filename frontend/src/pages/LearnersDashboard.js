@@ -35,7 +35,7 @@ import MenuBookIcon from "@mui/icons-material/MenuBook";
 import EditIcon from "@mui/icons-material/Edit";
 import { isInactiveLearnerStatus } from "../utils/learnerStatus";
 
-const API_BASE = "https://engg-automation-f191.onrender.com";
+const API_BASE = "http://192.168.1.2:5000/";
 
 function normalizeLearner(raw) {
   return {

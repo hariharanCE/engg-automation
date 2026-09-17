@@ -23,7 +23,7 @@ import {
 } from "@mui/icons-material";
 
 export default function LoginPage({ onLogin }) {
-  const BACKEND_URL = "https://engg-automation-f191.onrender.com"; // ✅ FIXED
+  const BACKEND_URL = "http://192.168.1.2:5000/"; // ✅ FIXED
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

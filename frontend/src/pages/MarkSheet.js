@@ -29,7 +29,7 @@ import ErrorIcon          from "@mui/icons-material/Error";
 import InfoOutlinedIcon   from "@mui/icons-material/InfoOutlined";
 import { isInactiveLearnerStatus } from "../utils/learnerStatus";
 const API_BASE =
-  process.env.REACT_APP_API_URL || "https://engg-automation-f191.onrender.com";
+  process.env.REACT_APP_API_URL || "http://192.168.1.2:5000/";
 const TOKENS = {
   bg:          "#d4e0fd",
   surface:     "#ffffff",

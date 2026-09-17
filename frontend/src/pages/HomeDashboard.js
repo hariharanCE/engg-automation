@@ -20,7 +20,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import SchoolIcon from '@mui/icons-material/School';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 
-const API_BASE = process.env.REACT_APP_API_URL || "https://engg-automation-f191.onrender.com";
+const API_BASE = process.env.REACT_APP_API_URL || "http://192.168.1.2:5000/";
 
 /* ─── Design tokens ─────────────────────────────────────────────────────── */
 const TOKENS = {

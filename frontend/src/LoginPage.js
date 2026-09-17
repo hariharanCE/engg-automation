@@ -1,7 +1,7 @@
 // frontend/src/LoginPage.js
 import React, { useState } from "react";
 
-const API_BASE = process.env.REACT_APP_API_URL || "https://engg-automation-f191.onrender.com";
+const API_BASE = process.env.REACT_APP_API_URL || "http://192.168.1.2:5000/";
 
 export default function LoginPage({ onLogin }) {
   const [email, setEmail] = useState("");

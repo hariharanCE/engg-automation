@@ -35,7 +35,7 @@ import InfoOutlinedIcon       from "@mui/icons-material/InfoOutlined";
 import RefreshIcon            from "@mui/icons-material/Refresh";
 
 const API_BASE =
-  process.env.REACT_APP_API_URL || "https://engg-automation-f191.onrender.com";
+  process.env.REACT_APP_API_URL || "http://192.168.1.2:5000/";
 
 const ASSESSMENT_LABELS = {
   "weekly-assessment":       "Weekly Assessment",

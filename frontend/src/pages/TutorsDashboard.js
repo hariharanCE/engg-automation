@@ -42,7 +42,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 
 const API_BASE =
-  process.env.REACT_APP_API_URL || "https://engg-automation-f191.onrender.com";
+  process.env.REACT_APP_API_URL || "http://192.168.1.2:5000/";
 
 export default function TutorsDashboard({ user, token }) {
   const [tutors, setTutors] = useState([]);
