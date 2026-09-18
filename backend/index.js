@@ -47,6 +47,7 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 dayjs.tz.setDefault("Asia/Kolkata");
 
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 const router = express.Router();
@@ -10137,7 +10138,7 @@ app.post("/api/attendance/upload", upload.single("file"), async (req, res) => {
 
 // Optional: root route for testing API status
 app.get("/", (req, res) => {
-  res.send("Attendance Mailer API is running");
+  res.send("Backend is running");
 });
 
 // Other endpoints (examples)
