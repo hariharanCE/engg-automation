@@ -137,7 +137,7 @@ app.use("/api/push", pushTokensRouter);
 // =====================================================
 // Multer File Upload Config
 // =====================================================
-const upload = multer({ dest: "uploads/" });
+const upload = multer({ dest: "/tmp/uploads/" });
 
 
 // ─── TABLE NAME MAP ──────────────────────────────────────────────────────────
@@ -1105,7 +1105,7 @@ app.get("/api/marks/window-status", async (req, res) => {
 // uses for file artifacts). This avoids a DB dependency for a short-lived
 // (≈ one day) value and works on the current deployment.
 // ───────────────────────────────────────────────────────────────────────────
-const MARK_EXT_DIR = path.join(process.cwd(), "uploads");
+const MARK_EXT_DIR = "/tmp/uploads";
 const MARK_EXT_FILE = path.join(MARK_EXT_DIR, "mark-window-extensions.json");
 const markExtKey = (b, t, d) => `${b}::${t}::${d}`;
 
