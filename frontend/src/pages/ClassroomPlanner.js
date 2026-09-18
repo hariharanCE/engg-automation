@@ -15,7 +15,7 @@ import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import CheckCircleIcon  from "@mui/icons-material/CheckCircle";
 import SwapHorizIcon    from "@mui/icons-material/SwapHoriz";
 
-const API_BASE = process.env.REACT_APP_API_URL || "http://192.168.1.2:5000/";
+const API_BASE = process.env.REACT_APP_API_URL || "https://engg-automation.vercel.app/";
 
 /* ─── Design tokens ──────────────────────────────────────────────────────── */
 const TOKENS = {

@@ -29,7 +29,7 @@ import ErrorIcon          from "@mui/icons-material/Error";
 import InfoOutlinedIcon   from "@mui/icons-material/InfoOutlined";
 import { isInactiveLearnerStatus } from "../utils/learnerStatus";
 const API_BASE =
-  process.env.REACT_APP_API_URL || "http://192.168.1.2:5000/";
+  process.env.REACT_APP_API_URL || "https://engg-automation.vercel.app/";
 const TOKENS = {
   bg:          "#d4e0fd",
   surface:     "#ffffff",

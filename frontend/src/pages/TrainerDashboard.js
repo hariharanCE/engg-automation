@@ -42,7 +42,7 @@ import { green, orange, red, grey } from "@mui/material/colors";
 import ManagerLeaveDashboard from "./ManagerLeaveDashboard";
 import TrainerAssignmentDashboard from "./TrainerAssignmentDashboard";
 
-const API_BASE = process.env.REACT_APP_API_URL || "http://192.168.1.2:5000/";
+const API_BASE = process.env.REACT_APP_API_URL || "https://engg-automation.vercel.app/";
 
 /* ─── Design tokens ──────────────────────────────────────────────────────── */
 const T = {

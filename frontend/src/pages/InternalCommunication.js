@@ -24,7 +24,7 @@ import UploadFileIcon    from "@mui/icons-material/UploadFile";
 import SendIcon          from "@mui/icons-material/Send";
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 
-const API_BASE = process.env.REACT_APP_API_URL || "http://192.168.1.2:5000/";
+const API_BASE = process.env.REACT_APP_API_URL || "https://engg-automation.vercel.app/";
 
 /* ─── Design tokens (matches CourseProgress) ─────────────────────────────── */
 const TOKENS = {

@@ -16,7 +16,7 @@ import {
 } from "@mui/material";
 
 const API_BASE =
-  process.env.REACT_APP_API_URL || "http://192.168.1.2:5000/";
+  process.env.REACT_APP_API_URL || "https://engg-automation.vercel.app/";
 
 const colorPalette = [
   "#edc7cf", "#bdd9bf", "#c7ceea", "#ffeebb",
