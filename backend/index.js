@@ -11097,7 +11097,12 @@ app.get('/api/attendance/by_batch', async (req, res) => {
 });
 
 
-app.listen(PORT, () => {
-  console.log(`🚀 Backend listening on http://localhost:${PORT}`);
-  console.log(`✅ Email scheduler is running - checking every minute for due emails`);
-});
+// Start local server only when running outside Vercel
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`🚀 Backend listening on http://localhost:${PORT}`);
+    console.log(`✅ Email scheduler is running - checking every minute for due emails`);
+  });
+}
+
+export default app;
