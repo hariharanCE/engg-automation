@@ -13,7 +13,7 @@ import {
 } from "@mui/icons-material";
 import axios from "axios";
 
-const API_BASE = process.env.REACT_APP_API_URL || "https://engg-automation.vercel.app/";
+const API_BASE = process.env.REACT_APP_API_URL || "https://engg-automation.vercel.app";
 
 /* ─── Design tokens ──────────────────────────────────────────────────────── */
 const TOKENS = {

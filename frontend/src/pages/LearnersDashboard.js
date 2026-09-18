@@ -35,7 +35,7 @@ import MenuBookIcon from "@mui/icons-material/MenuBook";
 import EditIcon from "@mui/icons-material/Edit";
 import { isInactiveLearnerStatus } from "../utils/learnerStatus";
 
-const API_BASE = "https://engg-automation.vercel.app/";
+const API_BASE = "https://engg-automation.vercel.app";
 
 function normalizeLearner(raw) {
   return {

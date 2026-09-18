@@ -27,7 +27,7 @@ import {
 } from "@mui/icons-material";
 
 const API_BASE =
-  process.env.REACT_APP_API_URL || "https://engg-automation.vercel.app/";
+  process.env.REACT_APP_API_URL || "https://engg-automation.vercel.app";
 
 // Admin / Manager / Coordinator review mark-entry extension requests raised by
 // trainers. Approving opens the window for that assessment until 11:59 PM of the

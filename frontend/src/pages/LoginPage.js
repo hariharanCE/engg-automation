@@ -23,7 +23,7 @@ import {
 } from "@mui/icons-material";
 
 export default function LoginPage({ onLogin }) {
-  const BACKEND_URL = "https://engg-automation.vercel.app/"; // ✅ FIXED
+  const BACKEND_URL = "https://engg-automation.vercel.app"; // ✅ FIXED
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

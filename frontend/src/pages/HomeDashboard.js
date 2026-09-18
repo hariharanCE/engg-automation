@@ -20,7 +20,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import SchoolIcon from '@mui/icons-material/School';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 
-const API_BASE = process.env.REACT_APP_API_URL || "https://engg-automation.vercel.app/";
+const API_BASE = process.env.REACT_APP_API_URL || "https://engg-automation.vercel.app";
 
 /* ─── Design tokens ─────────────────────────────────────────────────────── */
 const TOKENS = {

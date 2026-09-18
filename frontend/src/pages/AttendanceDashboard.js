@@ -49,7 +49,7 @@ function getStoredUser() {
   return null;
 }
 
-const API_BASE       = process.env.REACT_APP_API_URL || "https://engg-automation.vercel.app/";
+const API_BASE       = process.env.REACT_APP_API_URL || "https://engg-automation.vercel.app";
 const sessionsPerDay = 3;
 
 /* A day counts as "present" when the learner attended ≥ 2 of the 3 sessions.

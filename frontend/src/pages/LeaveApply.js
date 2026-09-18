@@ -32,7 +32,7 @@ import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 
 const API_BASE =
-  process.env.REACT_APP_API_URL || "https://engg-automation.vercel.app/";
+  process.env.REACT_APP_API_URL || "https://engg-automation.vercel.app";
 
 /* ─── Design tokens ──────────────────────────────────────────────────────── */
 const T = {

@@ -19,7 +19,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { isInactiveLearnerStatus } from "../utils/learnerStatus";
 
-const API_BASE = process.env.REACT_APP_API_URL || "https://engg-automation.vercel.app/";
+const API_BASE = process.env.REACT_APP_API_URL || "https://engg-automation.vercel.app";
 
 // Each teaching day has 3 sessions. A learner is "present" for a day when they
 // attended at least 2 of the 3 sessions (1 session present = day absent).

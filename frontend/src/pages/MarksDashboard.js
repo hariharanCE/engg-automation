@@ -40,7 +40,7 @@ import {
 } from "@mui/icons-material";
 
 const API_BASE =
-  process.env.REACT_APP_API_URL || "https://engg-automation.vercel.app/";
+  process.env.REACT_APP_API_URL || "https://engg-automation.vercel.app";
 
 /* ─── Design tokens ──────────────────────────────────────────────────────── */
 const TOKENS = {

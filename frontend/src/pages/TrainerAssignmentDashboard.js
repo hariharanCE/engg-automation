@@ -17,7 +17,7 @@ import {
   EventBusy        as EventBusyIcon,
 } from "@mui/icons-material";
 
-const API_BASE = "https://engg-automation.vercel.app/";
+const API_BASE = "https://engg-automation.vercel.app";
 
 /* ─── Design tokens (matches CourseProgress) ────────────────────────────── */
 const TOKENS = {

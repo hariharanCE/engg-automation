@@ -12,7 +12,7 @@ import UploadFileIcon       from "@mui/icons-material/UploadFile";
 import CheckCircleIcon      from "@mui/icons-material/CheckCircle";
 import ErrorIcon            from "@mui/icons-material/Error";
 
-const API_BASE = process.env.REACT_APP_API_URL || "https://engg-automation.vercel.app/";
+const API_BASE = process.env.REACT_APP_API_URL || "https://engg-automation.vercel.app";
 
 /* ─── Design tokens ──────────────────────────────────────────────────────── */
 const TOKENS = {

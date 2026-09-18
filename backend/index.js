@@ -113,7 +113,7 @@ app.use(cors({
     "https://engg-automation-6zzs.onrender.com",
     "http://localhost:3000",
     "http://192.168.1.2:5000/",
-    "https://engg-automation.vercel.app/",
+    "https://engg-automation.vercel.app",
     // Capacitor mobile app origins (APK / iOS)
     "https://localhost",
     "http://localhost",
@@ -7852,7 +7852,7 @@ app.post("/api/confirm-mock-interview", async (req, res) => {
     console.log('✅ [Trainer Confirmation] Coordinator found:', coordinators.email);
 
     // 5. Compose coordinator email
-    const API_BASE = process.env.REACT_APP_API_URL || "https://engg-automation.vercel.app/";
+    const API_BASE = process.env.REACT_APP_API_URL || "https://engg-automation.vercel.app";
     let mailHtml = "";
     let subject = "";
     
