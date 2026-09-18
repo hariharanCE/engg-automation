@@ -16,10 +16,19 @@ import { supabase } from "../supabaseClient.js";
 const router = express.Router();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 const ROOT_DIR = path.resolve(__dirname, "..", ".."); // repo root (holds templates)
 const SCRIPTS_DIR = path.join(__dirname, "..", "scripts");
-const WORK_DIR = path.join(__dirname, "..", "uploads", "course-planner");
-const PYTHON_BIN = process.env.PYTHON_BIN || (process.platform === "win32" ? "python" : "python3");
+
+// Vercel serverless functions can write only to /tmp at runtime.
+// Locally, continue using uploads/course-planner.
+const WORK_DIR = process.env.VERCEL
+  ? "/tmp/course-planner"
+  : path.join(__dirname, "..", "uploads", "course-planner");
+
+const PYTHON_BIN =
+  process.env.PYTHON_BIN ||
+  (process.platform === "win32" ? "python" : "python3");
 
 fs.mkdirSync(WORK_DIR, { recursive: true });
 
