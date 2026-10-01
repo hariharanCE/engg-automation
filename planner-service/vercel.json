@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "api/planner.py": {
+      "includeFiles": "assets/**",
+      "maxDuration": 60
+    }
+  }
+}
