@@ -5,6 +5,9 @@ The main Node backend (engg-automation.vercel.app) cannot run python3, so it
 POSTs to this function instead. This function runs the existing, unchanged
 scripts in ../assets/scripts using temporary files and returns the results.
 
+Scripts are executed in-process with runpy (no subprocess), with stdin/stdout/
+argv redirected, so they behave exactly like `python script.py` would.
+
 Actions (POST JSON { action, ... }):
   generate -> { cfg }                         => { stdout, xlsx_b64 }
   dump     -> { xlsx_b64 }                    => { stdout }
@@ -12,18 +15,24 @@ Actions (POST JSON { action, ... }):
   convert  -> { xlsx_b64, trainerCfg }        => { stdout, csv_b64 }
 """
 import base64
+import io
 import json
 import os
 import re
-import subprocess
+import runpy
 import sys
 import tempfile
+import threading
+import traceback
 from http.server import BaseHTTPRequestHandler
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS = os.path.join(BASE, "assets", "scripts")
 TEMPLATES = os.path.join(BASE, "assets", "templates")
 SECRET = os.environ.get("PLANNER_SECRET", "")
+
+# sys.stdin/stdout/argv are process-wide, so run one script at a time.
+_RUN_LOCK = threading.Lock()
 
 
 def find_holiday():
@@ -37,22 +46,42 @@ def find_holiday():
 
 
 def run(script, args=None, stdin=None, cwd=None):
-    # The deployment filesystem is read-only, so never write .pyc files.
-    env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
-    p = subprocess.run(
-        [sys.executable, os.path.join(SCRIPTS, script)] + (args or []),
-        input=stdin,
-        capture_output=True,
-        text=True,
-        timeout=50,
-        cwd=cwd,
-        env=env,
-    )
-    if p.returncode != 0:
+    """Run scripts/<script> like `python script args < stdin`; return stdout."""
+    path = os.path.join(SCRIPTS, script)
+    out, err = io.StringIO(), io.StringIO()
+    code = 0
+
+    with _RUN_LOCK:
+        saved = (sys.argv, sys.stdin, sys.stdout, sys.stderr, sys.dont_write_bytecode)
+        old_cwd = os.getcwd()
+        sys.argv = [path] + list(args or [])
+        sys.stdin = io.StringIO(stdin or "")
+        sys.stdout, sys.stderr = out, err
+        sys.dont_write_bytecode = True  # read-only deployment filesystem
+        try:
+            if cwd:
+                os.chdir(cwd)
+            runpy.run_path(path, run_name="__main__")
+        except SystemExit as e:
+            if e.code in (None, 0):
+                code = 0
+            elif isinstance(e.code, int):
+                code = e.code
+            else:  # sys.exit("message") -> message on stderr, exit code 1
+                err.write(str(e.code) + "\n")
+                code = 1
+        except BaseException:  # noqa: BLE001
+            err.write(traceback.format_exc())
+            code = 1
+        finally:
+            os.chdir(old_cwd)
+            sys.argv, sys.stdin, sys.stdout, sys.stderr, sys.dont_write_bytecode = saved
+
+    if code != 0:
         raise RuntimeError(
-            (p.stderr or "").strip() or f"{script} exited with code {p.returncode}"
+            err.getvalue().strip() or f"{script} exited with code {code}"
         )
-    return p.stdout.strip()
+    return out.getvalue().strip()
 
 
 def write_b64(b64, path):
@@ -74,9 +103,16 @@ class handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    # Health check: open /api/planner in a browser -> {"ok": true}
+    # Health check: open /api/planner in a browser -> {"ok": true, ...}
     def do_GET(self):
-        self._send(200, {"ok": True})
+        self._send(
+            200,
+            {
+                "ok": True,
+                "scripts": sorted(os.listdir(SCRIPTS)) if os.path.isdir(SCRIPTS) else [],
+                "templates": sorted(os.listdir(TEMPLATES)) if os.path.isdir(TEMPLATES) else [],
+            },
+        )
 
     def do_POST(self):
         if SECRET and self.headers.get("x-planner-secret") != SECRET:

@@ -7,3 +7,5 @@ backend/uploads/mark-window-extensions.json
 backend/uploads/mark-entry-open.json
 backend/uploads/mark-extension-requests.json
 backend/scripts/__pycache__/
+
+.vercel
