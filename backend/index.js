@@ -1875,28 +1875,38 @@ app.post("/upload-course-planner", async (req, res) => {
       });
     }
 
-    // 2) Normalize all expected columns for insert
+    // 2) Normalize all expected columns for insert.
+    // CSV cells can arrive as "", "null", "undefined", "NaN" etc. Convert all of
+    // them to a real NULL, otherwise Postgres rejects them in date/int columns
+    // (error: invalid input syntax for type date: "null").
+    const clean = (v) => {
+      if (v === undefined || v === null) return null;
+      const s = String(v).trim();
+      if (!s || /^(null|undefined|nan|none|n\/a)$/i.test(s)) return null;
+      return s;
+    };
+
     const rows = courses.map((c) => ({
-      classroom_name: (c.classroom_name || c.classroom || "").trim(),
-      batch_no: (c.batch_no || "").trim(),
-      domain: (c.domain || null),
-      mode: (c.mode || null),
-      week_no: (c.week_no || null),
-      date: (c.date || null),
-      start_time: (c.start_time || null),
-      end_time: (c.end_time || null),
-      module_name: (c.module_name || null),
-      module_topic: (c.module_topic || null),
-      topic_name: (c.topic_name || null),
-      trainer_name: (c.trainer_name || null),
-      trainer_email: (c.trainer_email || null),
-      topic_status: (c.topic_status || null),
-      remarks: (c.remarks || null),
-      batch_type: (c.batch_type || null),
-      actual_date: (c.actual_date || null),
-      date_difference: (c.date_difference || null),
-      date_changed_by: (c.date_changed_by || null),
-      date_changed_at: (c.date_changed_at || null),
+      classroom_name: clean(c.classroom_name || c.classroom) || "",
+      batch_no: clean(c.batch_no) || "",
+      domain: clean(c.domain),
+      mode: clean(c.mode),
+      week_no: clean(c.week_no),
+      date: clean(c.date),
+      start_time: clean(c.start_time),
+      end_time: clean(c.end_time),
+      module_name: clean(c.module_name),
+      module_topic: clean(c.module_topic),
+      topic_name: clean(c.topic_name),
+      trainer_name: clean(c.trainer_name),
+      trainer_email: clean(c.trainer_email),
+      topic_status: clean(c.topic_status),
+      remarks: clean(c.remarks),
+      batch_type: clean(c.batch_type),
+      actual_date: clean(c.actual_date),
+      date_difference: clean(c.date_difference),
+      date_changed_by: clean(c.date_changed_by),
+      date_changed_at: clean(c.date_changed_at),
     }));
 
     // 3) Insert into Supabase table
