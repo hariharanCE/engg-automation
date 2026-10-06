@@ -85,6 +85,48 @@ async function readMeta(id) {
 }
 
 // ---------------------------------------------------------------------------
+// GET /api/course-planner/health
+// Open this in a browser to verify (a) the NEW code is the one deployed, and
+// (b) the Python service + storage bucket are reachable and configured.
+// ---------------------------------------------------------------------------
+router.get("/health", async (req, res) => {
+  const out = {
+    codeVersion: "vercel-python-service-v2", // 404 on this route = OLD code is live
+    plannerServiceConfigured: !!PLANNER_URL,
+    plannerSecretConfigured: !!PLANNER_SECRET,
+    plannerService: null,
+    storageBucket: BUCKET,
+    storage: null,
+  };
+
+  if (PLANNER_URL) {
+    try {
+      const r = await fetch(`${PLANNER_URL}/api/planner`, {
+        signal: AbortSignal.timeout(8000),
+      });
+      const body = await r.json().catch(() => null);
+      out.plannerService = {
+        httpStatus: r.status,
+        ok: !!body?.ok,
+        scripts: body?.scripts || null,
+        templates: body?.templates || null,
+      };
+    } catch (e) {
+      out.plannerService = { error: e.message };
+    }
+  }
+
+  try {
+    const { error } = await store().list("", { limit: 1 });
+    out.storage = error ? { error: error.message } : { ok: true };
+  } catch (e) {
+    out.storage = { error: e.message };
+  }
+
+  res.json(out);
+});
+
+// ---------------------------------------------------------------------------
 // GET /api/course-planner/trainers
 // -> [{ name, email }] from internal_users, for the Theory/Lab trainer pickers.
 // ---------------------------------------------------------------------------
