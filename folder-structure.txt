@@ -1,9 +1,11 @@
 Folder PATH listing
 Volume serial number is A8DB-2970
 C:.
+|   .dockerignore
 |   .gitignore
 |   admin
 |   AUTOMATION_BLUEPRINT.pdf
+|   Dockerfile
 |   et --hard 6b53a19
 |   folder-structure.txt
 |   Holiday 2026.xlsx
@@ -13,8 +15,8 @@ C:.
 |   Online - DFT Course Planner Template.xlsx
 |   Online - DV Course Planner Template.xlsx
 |   Online - PD Course Planner Template.xlsx
-|   project-structure.txt
 |   README.md
+|   requirements.txt
 |   
 +---.claude
 |       settings.local.json
@@ -22,6 +24,10 @@ C:.
 +---.github
 |   \---appmod
 |       \---appcat
++---.vercel
+|       README.txt
+|       repo.json
+|       
 +---backend
 |   |   .env
 |   |   .env.example
@@ -234292,6 +234298,494 @@ C:.
 |       \---utils
 |               api.js
 |               learnerStatus.js
+|               
++---planner-service
+|   |   vercel.json
+|   |   
+|   +---.vercel
+|   |   |   .env.development.local
+|   |   |   project.json
+|   |   |   
+|   |   \---output
+|   |       |   builds.json
+|   |       |   config.json
+|   |       |   
+|   |       \---diagnostics
+|   |               cli_traces.json
+|   |               
+|   +---api
+|   |       planner.py
+|   |       
+|   \---assets
+|       +---scripts
+|       |   |   course_planner_grid.py
+|       |   |   course_planner_xlsx_to_csv.py
+|       |   |   generate_course_planner.py
+|       |   |   
+|       |   \---vendor
+|       |       +---et_xmlfile
+|       |       |   |   incremental_tree.py
+|       |       |   |   xmlfile.py
+|       |       |   |   __init__.py
+|       |       |   |   
+|       |       |   \---__pycache__
+|       |       |           incremental_tree.cpython-311.pyc
+|       |       |           xmlfile.cpython-311.pyc
+|       |       |           __init__.cpython-311.pyc
+|       |       |           
+|       |       \---openpyxl
+|       |           |   _constants.py
+|       |           |   __init__.py
+|       |           |   
+|       |           +---cell
+|       |           |   |   cell.py
+|       |           |   |   read_only.py
+|       |           |   |   rich_text.py
+|       |           |   |   text.py
+|       |           |   |   _writer.py
+|       |           |   |   __init__.py
+|       |           |   |   
+|       |           |   \---__pycache__
+|       |           |           cell.cpython-311.pyc
+|       |           |           read_only.cpython-311.pyc
+|       |           |           rich_text.cpython-311.pyc
+|       |           |           text.cpython-311.pyc
+|       |           |           _writer.cpython-311.pyc
+|       |           |           __init__.cpython-311.pyc
+|       |           |           
+|       |           +---chart
+|       |           |   |   area_chart.py
+|       |           |   |   axis.py
+|       |           |   |   bar_chart.py
+|       |           |   |   bubble_chart.py
+|       |           |   |   chartspace.py
+|       |           |   |   data_source.py
+|       |           |   |   descriptors.py
+|       |           |   |   error_bar.py
+|       |           |   |   label.py
+|       |           |   |   layout.py
+|       |           |   |   legend.py
+|       |           |   |   line_chart.py
+|       |           |   |   marker.py
+|       |           |   |   picture.py
+|       |           |   |   pie_chart.py
+|       |           |   |   pivot.py
+|       |           |   |   plotarea.py
+|       |           |   |   print_settings.py
+|       |           |   |   radar_chart.py
+|       |           |   |   reader.py
+|       |           |   |   reference.py
+|       |           |   |   scatter_chart.py
+|       |           |   |   series.py
+|       |           |   |   series_factory.py
+|       |           |   |   shapes.py
+|       |           |   |   stock_chart.py
+|       |           |   |   surface_chart.py
+|       |           |   |   text.py
+|       |           |   |   title.py
+|       |           |   |   trendline.py
+|       |           |   |   updown_bars.py
+|       |           |   |   _3d.py
+|       |           |   |   _chart.py
+|       |           |   |   __init__.py
+|       |           |   |   
+|       |           |   \---__pycache__
+|       |           |           area_chart.cpython-311.pyc
+|       |           |           axis.cpython-311.pyc
+|       |           |           bar_chart.cpython-311.pyc
+|       |           |           bubble_chart.cpython-311.pyc
+|       |           |           chartspace.cpython-311.pyc
+|       |           |           data_source.cpython-311.pyc
+|       |           |           descriptors.cpython-311.pyc
+|       |           |           error_bar.cpython-311.pyc
+|       |           |           label.cpython-311.pyc
+|       |           |           layout.cpython-311.pyc
+|       |           |           legend.cpython-311.pyc
+|       |           |           line_chart.cpython-311.pyc
+|       |           |           marker.cpython-311.pyc
+|       |           |           picture.cpython-311.pyc
+|       |           |           pie_chart.cpython-311.pyc
+|       |           |           pivot.cpython-311.pyc
+|       |           |           plotarea.cpython-311.pyc
+|       |           |           print_settings.cpython-311.pyc
+|       |           |           radar_chart.cpython-311.pyc
+|       |           |           reader.cpython-311.pyc
+|       |           |           reference.cpython-311.pyc
+|       |           |           scatter_chart.cpython-311.pyc
+|       |           |           series.cpython-311.pyc
+|       |           |           series_factory.cpython-311.pyc
+|       |           |           shapes.cpython-311.pyc
+|       |           |           stock_chart.cpython-311.pyc
+|       |           |           surface_chart.cpython-311.pyc
+|       |           |           text.cpython-311.pyc
+|       |           |           title.cpython-311.pyc
+|       |           |           trendline.cpython-311.pyc
+|       |           |           updown_bars.cpython-311.pyc
+|       |           |           _3d.cpython-311.pyc
+|       |           |           _chart.cpython-311.pyc
+|       |           |           __init__.cpython-311.pyc
+|       |           |           
+|       |           +---chartsheet
+|       |           |   |   chartsheet.py
+|       |           |   |   custom.py
+|       |           |   |   properties.py
+|       |           |   |   protection.py
+|       |           |   |   publish.py
+|       |           |   |   relation.py
+|       |           |   |   views.py
+|       |           |   |   __init__.py
+|       |           |   |   
+|       |           |   \---__pycache__
+|       |           |           chartsheet.cpython-311.pyc
+|       |           |           custom.cpython-311.pyc
+|       |           |           properties.cpython-311.pyc
+|       |           |           protection.cpython-311.pyc
+|       |           |           publish.cpython-311.pyc
+|       |           |           relation.cpython-311.pyc
+|       |           |           views.cpython-311.pyc
+|       |           |           __init__.cpython-311.pyc
+|       |           |           
+|       |           +---comments
+|       |           |   |   author.py
+|       |           |   |   comments.py
+|       |           |   |   comment_sheet.py
+|       |           |   |   shape_writer.py
+|       |           |   |   __init__.py
+|       |           |   |   
+|       |           |   \---__pycache__
+|       |           |           author.cpython-311.pyc
+|       |           |           comments.cpython-311.pyc
+|       |           |           comment_sheet.cpython-311.pyc
+|       |           |           shape_writer.cpython-311.pyc
+|       |           |           __init__.cpython-311.pyc
+|       |           |           
+|       |           +---compat
+|       |           |   |   abc.py
+|       |           |   |   numbers.py
+|       |           |   |   product.py
+|       |           |   |   singleton.py
+|       |           |   |   strings.py
+|       |           |   |   __init__.py
+|       |           |   |   
+|       |           |   \---__pycache__
+|       |           |           numbers.cpython-311.pyc
+|       |           |           strings.cpython-311.pyc
+|       |           |           __init__.cpython-311.pyc
+|       |           |           
+|       |           +---descriptors
+|       |           |   |   base.py
+|       |           |   |   container.py
+|       |           |   |   excel.py
+|       |           |   |   namespace.py
+|       |           |   |   nested.py
+|       |           |   |   sequence.py
+|       |           |   |   serialisable.py
+|       |           |   |   slots.py
+|       |           |   |   __init__.py
+|       |           |   |   
+|       |           |   \---__pycache__
+|       |           |           base.cpython-311.pyc
+|       |           |           container.cpython-311.pyc
+|       |           |           excel.cpython-311.pyc
+|       |           |           namespace.cpython-311.pyc
+|       |           |           nested.cpython-311.pyc
+|       |           |           sequence.cpython-311.pyc
+|       |           |           serialisable.cpython-311.pyc
+|       |           |           __init__.cpython-311.pyc
+|       |           |           
+|       |           +---drawing
+|       |           |   |   colors.py
+|       |           |   |   connector.py
+|       |           |   |   drawing.py
+|       |           |   |   effect.py
+|       |           |   |   fill.py
+|       |           |   |   geometry.py
+|       |           |   |   graphic.py
+|       |           |   |   image.py
+|       |           |   |   line.py
+|       |           |   |   picture.py
+|       |           |   |   properties.py
+|       |           |   |   relation.py
+|       |           |   |   spreadsheet_drawing.py
+|       |           |   |   text.py
+|       |           |   |   xdr.py
+|       |           |   |   __init__.py
+|       |           |   |   
+|       |           |   \---__pycache__
+|       |           |           colors.cpython-311.pyc
+|       |           |           connector.cpython-311.pyc
+|       |           |           drawing.cpython-311.pyc
+|       |           |           effect.cpython-311.pyc
+|       |           |           fill.cpython-311.pyc
+|       |           |           geometry.cpython-311.pyc
+|       |           |           graphic.cpython-311.pyc
+|       |           |           image.cpython-311.pyc
+|       |           |           line.cpython-311.pyc
+|       |           |           picture.cpython-311.pyc
+|       |           |           properties.cpython-311.pyc
+|       |           |           relation.cpython-311.pyc
+|       |           |           spreadsheet_drawing.cpython-311.pyc
+|       |           |           text.cpython-311.pyc
+|       |           |           xdr.cpython-311.pyc
+|       |           |           __init__.cpython-311.pyc
+|       |           |           
+|       |           +---formatting
+|       |           |   |   formatting.py
+|       |           |   |   rule.py
+|       |           |   |   __init__.py
+|       |           |   |   
+|       |           |   \---__pycache__
+|       |           |           formatting.cpython-311.pyc
+|       |           |           rule.cpython-311.pyc
+|       |           |           __init__.cpython-311.pyc
+|       |           |           
+|       |           +---formula
+|       |           |   |   tokenizer.py
+|       |           |   |   translate.py
+|       |           |   |   __init__.py
+|       |           |   |   
+|       |           |   \---__pycache__
+|       |           |           tokenizer.cpython-311.pyc
+|       |           |           translate.cpython-311.pyc
+|       |           |           __init__.cpython-311.pyc
+|       |           |           
+|       |           +---packaging
+|       |           |   |   core.py
+|       |           |   |   custom.py
+|       |           |   |   extended.py
+|       |           |   |   interface.py
+|       |           |   |   manifest.py
+|       |           |   |   relationship.py
+|       |           |   |   workbook.py
+|       |           |   |   __init__.py
+|       |           |   |   
+|       |           |   \---__pycache__
+|       |           |           core.cpython-311.pyc
+|       |           |           custom.cpython-311.pyc
+|       |           |           extended.cpython-311.pyc
+|       |           |           manifest.cpython-311.pyc
+|       |           |           relationship.cpython-311.pyc
+|       |           |           workbook.cpython-311.pyc
+|       |           |           __init__.cpython-311.pyc
+|       |           |           
+|       |           +---pivot
+|       |           |   |   cache.py
+|       |           |   |   fields.py
+|       |           |   |   record.py
+|       |           |   |   table.py
+|       |           |   |   __init__.py
+|       |           |   |   
+|       |           |   \---__pycache__
+|       |           |           cache.cpython-311.pyc
+|       |           |           fields.cpython-311.pyc
+|       |           |           record.cpython-311.pyc
+|       |           |           table.cpython-311.pyc
+|       |           |           __init__.cpython-311.pyc
+|       |           |           
+|       |           +---reader
+|       |           |   |   drawings.py
+|       |           |   |   excel.py
+|       |           |   |   strings.py
+|       |           |   |   workbook.py
+|       |           |   |   __init__.py
+|       |           |   |   
+|       |           |   \---__pycache__
+|       |           |           drawings.cpython-311.pyc
+|       |           |           excel.cpython-311.pyc
+|       |           |           strings.cpython-311.pyc
+|       |           |           workbook.cpython-311.pyc
+|       |           |           __init__.cpython-311.pyc
+|       |           |           
+|       |           +---styles
+|       |           |   |   alignment.py
+|       |           |   |   borders.py
+|       |           |   |   builtins.py
+|       |           |   |   cell_style.py
+|       |           |   |   colors.py
+|       |           |   |   differential.py
+|       |           |   |   fills.py
+|       |           |   |   fonts.py
+|       |           |   |   named_styles.py
+|       |           |   |   numbers.py
+|       |           |   |   protection.py
+|       |           |   |   proxy.py
+|       |           |   |   styleable.py
+|       |           |   |   stylesheet.py
+|       |           |   |   table.py
+|       |           |   |   __init__.py
+|       |           |   |   
+|       |           |   \---__pycache__
+|       |           |           alignment.cpython-311.pyc
+|       |           |           borders.cpython-311.pyc
+|       |           |           builtins.cpython-311.pyc
+|       |           |           cell_style.cpython-311.pyc
+|       |           |           colors.cpython-311.pyc
+|       |           |           differential.cpython-311.pyc
+|       |           |           fills.cpython-311.pyc
+|       |           |           fonts.cpython-311.pyc
+|       |           |           named_styles.cpython-311.pyc
+|       |           |           numbers.cpython-311.pyc
+|       |           |           protection.cpython-311.pyc
+|       |           |           proxy.cpython-311.pyc
+|       |           |           styleable.cpython-311.pyc
+|       |           |           stylesheet.cpython-311.pyc
+|       |           |           table.cpython-311.pyc
+|       |           |           __init__.cpython-311.pyc
+|       |           |           
+|       |           +---utils
+|       |           |   |   bound_dictionary.py
+|       |           |   |   cell.py
+|       |           |   |   dataframe.py
+|       |           |   |   datetime.py
+|       |           |   |   escape.py
+|       |           |   |   exceptions.py
+|       |           |   |   formulas.py
+|       |           |   |   indexed_list.py
+|       |           |   |   inference.py
+|       |           |   |   protection.py
+|       |           |   |   units.py
+|       |           |   |   __init__.py
+|       |           |   |   
+|       |           |   \---__pycache__
+|       |           |           bound_dictionary.cpython-311.pyc
+|       |           |           cell.cpython-311.pyc
+|       |           |           datetime.cpython-311.pyc
+|       |           |           escape.cpython-311.pyc
+|       |           |           exceptions.cpython-311.pyc
+|       |           |           formulas.cpython-311.pyc
+|       |           |           indexed_list.cpython-311.pyc
+|       |           |           protection.cpython-311.pyc
+|       |           |           units.cpython-311.pyc
+|       |           |           __init__.cpython-311.pyc
+|       |           |           
+|       |           +---workbook
+|       |           |   |   child.py
+|       |           |   |   defined_name.py
+|       |           |   |   external_reference.py
+|       |           |   |   function_group.py
+|       |           |   |   properties.py
+|       |           |   |   protection.py
+|       |           |   |   smart_tags.py
+|       |           |   |   views.py
+|       |           |   |   web.py
+|       |           |   |   workbook.py
+|       |           |   |   _writer.py
+|       |           |   |   __init__.py
+|       |           |   |   
+|       |           |   +---external_link
+|       |           |   |   |   external.py
+|       |           |   |   |   __init__.py
+|       |           |   |   |   
+|       |           |   |   \---__pycache__
+|       |           |   |           external.cpython-311.pyc
+|       |           |   |           __init__.cpython-311.pyc
+|       |           |   |           
+|       |           |   \---__pycache__
+|       |           |           child.cpython-311.pyc
+|       |           |           defined_name.cpython-311.pyc
+|       |           |           external_reference.cpython-311.pyc
+|       |           |           function_group.cpython-311.pyc
+|       |           |           properties.cpython-311.pyc
+|       |           |           protection.cpython-311.pyc
+|       |           |           smart_tags.cpython-311.pyc
+|       |           |           views.cpython-311.pyc
+|       |           |           web.cpython-311.pyc
+|       |           |           workbook.cpython-311.pyc
+|       |           |           _writer.cpython-311.pyc
+|       |           |           __init__.cpython-311.pyc
+|       |           |           
+|       |           +---worksheet
+|       |           |   |   cell_range.py
+|       |           |   |   cell_watch.py
+|       |           |   |   controls.py
+|       |           |   |   copier.py
+|       |           |   |   custom.py
+|       |           |   |   datavalidation.py
+|       |           |   |   dimensions.py
+|       |           |   |   drawing.py
+|       |           |   |   errors.py
+|       |           |   |   filters.py
+|       |           |   |   formula.py
+|       |           |   |   header_footer.py
+|       |           |   |   hyperlink.py
+|       |           |   |   merge.py
+|       |           |   |   ole.py
+|       |           |   |   page.py
+|       |           |   |   pagebreak.py
+|       |           |   |   picture.py
+|       |           |   |   print_settings.py
+|       |           |   |   properties.py
+|       |           |   |   protection.py
+|       |           |   |   related.py
+|       |           |   |   scenario.py
+|       |           |   |   smart_tag.py
+|       |           |   |   table.py
+|       |           |   |   views.py
+|       |           |   |   worksheet.py
+|       |           |   |   _reader.py
+|       |           |   |   _read_only.py
+|       |           |   |   _writer.py
+|       |           |   |   _write_only.py
+|       |           |   |   __init__.py
+|       |           |   |   
+|       |           |   \---__pycache__
+|       |           |           cell_range.cpython-311.pyc
+|       |           |           copier.cpython-311.pyc
+|       |           |           datavalidation.cpython-311.pyc
+|       |           |           dimensions.cpython-311.pyc
+|       |           |           drawing.cpython-311.pyc
+|       |           |           filters.cpython-311.pyc
+|       |           |           formula.cpython-311.pyc
+|       |           |           header_footer.cpython-311.pyc
+|       |           |           hyperlink.cpython-311.pyc
+|       |           |           merge.cpython-311.pyc
+|       |           |           page.cpython-311.pyc
+|       |           |           pagebreak.cpython-311.pyc
+|       |           |           print_settings.cpython-311.pyc
+|       |           |           properties.cpython-311.pyc
+|       |           |           protection.cpython-311.pyc
+|       |           |           related.cpython-311.pyc
+|       |           |           scenario.cpython-311.pyc
+|       |           |           table.cpython-311.pyc
+|       |           |           views.cpython-311.pyc
+|       |           |           worksheet.cpython-311.pyc
+|       |           |           _reader.cpython-311.pyc
+|       |           |           _read_only.cpython-311.pyc
+|       |           |           _writer.cpython-311.pyc
+|       |           |           _write_only.cpython-311.pyc
+|       |           |           __init__.cpython-311.pyc
+|       |           |           
+|       |           +---writer
+|       |           |   |   excel.py
+|       |           |   |   theme.py
+|       |           |   |   __init__.py
+|       |           |   |   
+|       |           |   \---__pycache__
+|       |           |           excel.cpython-311.pyc
+|       |           |           theme.cpython-311.pyc
+|       |           |           __init__.cpython-311.pyc
+|       |           |           
+|       |           +---xml
+|       |           |   |   constants.py
+|       |           |   |   functions.py
+|       |           |   |   __init__.py
+|       |           |   |   
+|       |           |   \---__pycache__
+|       |           |           constants.cpython-311.pyc
+|       |           |           functions.cpython-311.pyc
+|       |           |           __init__.cpython-311.pyc
+|       |           |           
+|       |           \---__pycache__
+|       |                   _constants.cpython-311.pyc
+|       |                   __init__.cpython-311.pyc
+|       |                   
+|       \---templates
+|               Holiday 2026.xlsx
+|               Offline - DV Course Planner Template.xlsx
+|               Offline - PD Course Planner Template.xlsx
+|               Online - DFT Course Planner Template.xlsx
+|               Online - DV Course Planner Template.xlsx
+|               Online - PD Course Planner Template.xlsx
 |               
 \---services
         emailService.js
