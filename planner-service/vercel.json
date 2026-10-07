@@ -4,7 +4,8 @@
   "buildCommand": "",
   "functions": {
     "api/planner.py": {
-      "maxDuration": 60
+      "maxDuration": 60,
+      "includeFiles": "assets/**"
     }
   }
 }
