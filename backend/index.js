@@ -10152,15 +10152,23 @@ app.get("/", (req, res) => {
   res.send("Backend is running");
 });
 
+//test route for the email sending
 app.get("/api/debug/test-email", async (req, res) => {
-  if (req.query.key !== process.env.DEBUG_KEY) return res.sendStatus(403);
-  const result = await sendRawEmail({
-    to: req.query.to,
-    subject: "SMTP test from Vercel",
-    text: "If you got this, SMTP works from Vercel.",
-  });
-  res.json(result);
+  if (!process.env.DEBUG_KEY || req.query.key !== process.env.DEBUG_KEY) {
+    return res.sendStatus(403);
+  }
+  try {
+    const result = await sendRawEmail({
+      to: req.query.to,
+      subject: "SMTP test from Vercel",
+      text: "If you got this, SMTP works from Vercel.",
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
+
 
 // Other endpoints (examples)
 app.get("/api/hello", (req, res) => {
