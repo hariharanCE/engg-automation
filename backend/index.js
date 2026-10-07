@@ -11116,4 +11116,103 @@ if (!process.env.VERCEL) {
   });
 }
 
+// ─── Send each learner ONLY their own marks ───────────────────────────────
+const MARKS_EMAIL_ROLES = ["admin", "manager", "coordinator", "corrdinator"];
+
+const escHtml = (s) =>
+  String(s ?? "").replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
+  );
+
+function buildMarksEmailHtml({ name, batch_no, assessment_label, headers, rows }) {
+  const th = "padding:8px 12px;background:#f3f4f8;border:1px solid #e4e8f0;text-align:left;font-size:13px;";
+  const td = "padding:8px 12px;border:1px solid #e4e8f0;font-size:13px;";
+
+  let table;
+  if (rows.length === 1) {
+    // one row (scorecard) -> vertical "label | value" table
+    table = headers
+      .map((h, i) => `<tr><th style="${th}">${escHtml(h)}</th><td style="${td}">${escHtml(rows[0][i])}</td></tr>`)
+      .join("");
+  } else {
+    // many rows (weekly / module ...) -> normal table
+    table =
+      `<tr>${headers.map((h) => `<th style="${th}">${escHtml(h)}</th>`).join("")}</tr>` +
+      rows.map((r) => `<tr>${r.map((v) => `<td style="${td}">${escHtml(v)}</td>`).join("")}</tr>`).join("");
+  }
+
+  return `
+    <div style="font-family:Arial,sans-serif;color:#1a1f36;">
+      <p>Hi ${escHtml(name || "Learner")},</p>
+      <p>Here are your <b>${escHtml(assessment_label)}</b> marks for batch <b>${escHtml(batch_no)}</b>:</p>
+      <table style="border-collapse:collapse;">${table}</table>
+      <p style="margin-top:16px;">Regards,<br/>Training Team</p>
+    </div>`;
+}
+
+app.post("/api/marks/send-email", async (req, res) => {
+  try {
+    const { batch_no, assessment_label, role, recipients } = req.body || {};
+
+    if (!batch_no) return res.status(400).json({ error: "batch_no is required" });
+    if (!MARKS_EMAIL_ROLES.includes((role || "").toString().trim().toLowerCase())) {
+      return res.status(403).json({ error: "You are not allowed to send marks emails" });
+    }
+    if (!Array.isArray(recipients) || recipients.length === 0) {
+      return res.status(400).json({ error: "No recipients provided" });
+    }
+    if (recipients.length > 300) {
+      return res.status(400).json({ error: "Too many recipients (max 300)" });
+    }
+
+    // Only mail addresses that really belong to this batch (stops misuse of SMTP)
+    const { data: learners, error: lErr } = await supabase
+      .from("learners_data")
+      .select("email")
+      .eq("batch_no", batch_no);
+    if (lErr) throw lErr;
+    const validEmails = new Set((learners || []).map((l) => (l.email || "").trim().toLowerCase()));
+
+    const skipped = [];
+    const jobs = [];
+    for (const r of recipients) {
+      const email = (r?.email || "").trim();
+      if (
+        !email ||
+        !validEmails.has(email.toLowerCase()) ||
+        !Array.isArray(r.headers) ||
+        !Array.isArray(r.rows) ||
+        r.rows.length === 0
+      ) {
+        skipped.push(email || "(no email)");
+        continue;
+      }
+      jobs.push({
+        email,
+        subject: `Your ${assessment_label} marks — Batch ${batch_no}`,
+        html: buildMarksEmailHtml({ name: r.name, batch_no, assessment_label, headers: r.headers, rows: r.rows }),
+      });
+    }
+
+    // Send 5 at a time, and wait for all of them before responding (needed on Vercel)
+    let sent = 0;
+    const failures = [];
+    for (let i = 0; i < jobs.length; i += 5) {
+      const chunk = jobs.slice(i, i + 5);
+      const results = await Promise.all(
+        chunk.map((j) => sendRawEmail({ to: j.email, subject: j.subject, html: j.html }))
+      );
+      results.forEach((r, idx) => {
+        if (r?.success) sent++;
+        else failures.push({ email: chunk[idx].email, error: r?.error || "send failed" });
+      });
+    }
+
+    return res.json({ success: true, sent, failed: failures.length, skipped, failures });
+  } catch (err) {
+    console.error("Marks email error:", err);
+    return res.status(500).json({ error: err.message || "Failed to send emails" });
+  }
+});
+
 export default app;

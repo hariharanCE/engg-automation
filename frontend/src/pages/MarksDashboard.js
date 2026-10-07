@@ -37,6 +37,7 @@ import {
   Undo             as UndoIcon,
   LockOpen         as LockOpenIcon,
   Lock             as LockIcon,
+  Email            as EmailIcon,
 } from "@mui/icons-material";
 
 const API_BASE =
@@ -722,6 +723,7 @@ export default function MarksDashboard({ user }) {
   const [remarksDraft, setRemarksDraft] = useState({});    // { email: remarks }
   const [showErrors,   setShowErrors]   = useState(false);
   const [saving,       setSaving]       = useState(false);
+  const [emailing, setEmailing] = useState(false);
 
   /* Prefer the prop; fall back to the stored session so role detection works
    * regardless of which login flow ran. */
@@ -989,6 +991,116 @@ export default function MarksDashboard({ user }) {
     remarksError: email => showErrors && !!edits[email] && !remarksFor(email).trim(),
   };
 
+    /* ── Send each learner only their own marks ── */
+  const SEND_EMAIL_ROLES = ["admin", "manager", "coordinator", "corrdinator"];
+  const canSendEmails = SEND_EMAIL_ROLES.includes((activeUser?.role || "").toString().trim().toLowerCase());
+
+  const pctTxt = v =>
+    v === "AB" || v === null || v === undefined || v === "" ? (v || "—") : `${parseFloat(v).toFixed(2)}%`;
+  const overallTxt = v => {
+    const x = abOverall(v);
+    return x === "AB" || x === null || x === undefined || x === "" ? (x || "—") : `${x}%`;
+  };
+
+  /* One entry per learner, containing ONLY that learner's marks. */
+  const buildEmailRecipients = () => {
+    if (isScorecard) {
+      return displayScorecard.map(r => {
+        const pairs = isDvft
+          ? [
+              ["Intermediate", pctTxt(ab(r.intermediate))],
+              ["Digital",      pctTxt(ab(r.breakdown?.digital))],
+              ["Verilog",      pctTxt(ab(r.breakdown?.verilog))],
+              ["Group 1 Avg",  pctTxt(ab(r.dvGroup1))],
+              ["SV",           pctTxt(ab(r.breakdown?.sv))],
+              ["UVM",          pctTxt(ab(r.breakdown?.uvm))],
+              ["Python",       pctTxt(ab(r.breakdown?.python))],
+              ["Group 2 Avg",  pctTxt(ab(r.dvGroup2))],
+              ["Project",      pctTxt(ab(r.project))],
+              ["Viva",         pctTxt(ab(r.viva))],
+              ["Overall",      overallTxt(r.overall)],
+              ["Grade",        r.grade],
+              ["Certification", r.certification],
+              ["Placement",    r.placement],
+            ]
+          : [
+              ["Intermediate", pctTxt(ab(r.intermediate))],
+              ["Digital",      pctTxt(ab(r.breakdown?.digital))],
+              ["CMOS",         pctTxt(ab(r.breakdown?.cmos))],
+              ["TCL",          pctTxt(ab(r.breakdown?.tcl))],
+              ["Theory Group", pctTxt(ab(r.theory))],
+              ["Physical",     pctTxt(ab(r.breakdown?.physical))],
+              ["Project",      pctTxt(ab(r.project))],
+              ["Viva",         pctTxt(ab(r.viva))],
+              ["Overall",      overallTxt(r.overall)],
+              ["Grade",        r.grade],
+              ["Certification", r.certification],
+              ["Placement",    r.placement],
+            ];
+        const remarks = remarksFor(r.email);
+        if (remarks) pairs.push(["Remarks", remarks]);
+        return {
+          email: r.email,
+          name:  r.name,
+          headers: pairs.map(p => p[0]),
+          rows:    [pairs.map(p => p[1] ?? "—")],
+        };
+      });
+    }
+
+    /* Weekly / Intermediate / Module / Final: group the rows by learner */
+    const cols = getNonScorecardColumns().filter(
+      c => !["learner_name", "learner_email", "batch_no"].includes(c.key)
+    );
+    const byLearner = {};
+    marksData.forEach(row => {
+      const em = (row.learner_email || "").trim();
+      if (!em) return;
+      if (!byLearner[em]) byLearner[em] = { email: em, name: row.learner_name, headers: cols.map(c => c.label), rows: [] };
+      byLearner[em].rows.push(cols.map(c =>
+        c.key === "percentage" && row[c.key] != null && !isNaN(parseFloat(row[c.key]))
+          ? `${parseFloat(row[c.key]).toFixed(2)}%`
+          : (row[c.key] ?? "—")
+      ));
+    });
+    return Object.values(byLearner);
+  };
+
+  const sendMarksEmails = async () => {
+    if (emailing) return;
+    if (isScorecard && dirtyCount > 0) {
+      setMessage("⚠️ Save or discard your scorecard changes before sending emails");
+      return;
+    }
+    const recipients = buildEmailRecipients();
+    if (!recipients.length) { setMessage("⚠️ No learners with an email to send to"); return; }
+
+    const label = isScorecard ? "Scorecard"
+      : assessmentType.charAt(0).toUpperCase() + assessmentType.slice(1) + " Assessment";
+
+    if (!window.confirm(`Send each learner their own ${label} marks?\n\n${recipients.length} email${recipients.length !== 1 ? "s" : ""} will be sent for batch ${batchNo}.`)) return;
+
+    setEmailing(true); setMessage("");
+    try {
+      const res = await axios.post(`${API_BASE}/api/marks/send-email`, {
+        batch_no: batchNo,
+        assessment_label: label,
+        role: activeUser?.role || "",
+        recipients,
+      });
+      const { sent = 0, failed = 0, skipped = [] } = res.data || {};
+      if (failed || skipped.length) {
+        setMessage(`⚠️ Sent ${sent}, failed ${failed}, skipped ${skipped.length}${skipped.length ? ` (${skipped.slice(0, 3).join(", ")}${skipped.length > 3 ? "…" : ""})` : ""}`);
+      } else {
+        setMessage(`✅ Marks emailed to ${sent} learner${sent !== 1 ? "s" : ""}`);
+      }
+    } catch (err) {
+      setMessage(`Error sending emails: ${err?.response?.data?.error || err.message || "unknown"}`);
+    } finally {
+      setEmailing(false);
+    }
+  };
+
   /* ── Column definitions for non-scorecard tables ── */
   const getNonScorecardColumns = () => {
     if (!marksData.length || isScorecard) return [];
@@ -1183,6 +1295,13 @@ export default function MarksDashboard({ user }) {
                     {saving ? "Saving…" : `Save Changes (${dirtyCount})`}
                   </Button>
                 </>
+              )}
+              {canSendEmails && (
+                <Button variant="contained" onClick={sendMarksEmails} disabled={emailing || saving}
+                  startIcon={emailing ? <CircularProgress size={14} color="inherit" /> : <EmailIcon sx={{ fontSize: 16 }} />}
+                  sx={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 12, borderRadius: "10px", textTransform: "none", px: 2.5, background: TOKENS.accent, "&:hover": { background: "#2a3fd4" }, "&:disabled": { opacity: 0.6 } }}>
+                  {emailing ? "Sending…" : "Send Email"}
+                </Button>
               )}
               <Button variant="outlined" startIcon={<DownloadIcon sx={{ fontSize: 16 }} />} onClick={downloadExcel}
                 sx={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 12, borderRadius: "10px", textTransform: "none", borderColor: TOKENS.border, color: TOKENS.textSub, "&:hover": { borderColor: TOKENS.accent, color: TOKENS.accent, background: TOKENS.accentLight } }}>
