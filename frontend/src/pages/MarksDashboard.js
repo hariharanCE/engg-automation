@@ -1301,7 +1301,6 @@ export default function MarksDashboard({ user }) {
                   startIcon={emailing ? <CircularProgress size={14} color="inherit" /> : <EmailIcon sx={{ fontSize: 16 }} />}
                   sx={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 12, borderRadius: "10px", textTransform: "none", px: 2.5, background: TOKENS.accent, "&:hover": { background: "#2a3fd4" }, "&:disabled": { opacity: 0.6 } }}>
                   {emailing ? "Sending…" : "Send Email"}
-                  Send Email
                 </Button>
               )}
               <Button variant="outlined" startIcon={<DownloadIcon sx={{ fontSize: 16 }} />} onClick={downloadExcel}

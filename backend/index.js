@@ -11124,29 +11124,95 @@ const escHtml = (s) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
   );
 
-function buildMarksEmailHtml({ name, batch_no, assessment_label, headers, rows }) {
-  const th = "padding:8px 12px;background:#f3f4f8;border:1px solid #e4e8f0;text-align:left;font-size:13px;";
-  const td = "padding:8px 12px;border:1px solid #e4e8f0;font-size:13px;";
+function buildMarksEmailHtml({ name, email, batch_no, assessment_label, headers, rows }) {
+  const FONT = "font-family:Arial,Helvetica,sans-serif;color:#1a1f36;font-size:14px;";
+  const labelCell = "padding:6px 8px;border:1px solid #000;background:#f2f2f2;font-weight:bold;font-size:13px;white-space:nowrap;";
+  const valueCell = "padding:6px 8px;border:1px solid #000;font-size:13px;";
+  const h3 = "font-size:16px;margin:22px 0 8px;";
 
-  let table;
-  if (rows.length === 1) {
-    // one row (scorecard) -> vertical "label | value" table
-    table = headers
-      .map((h, i) => `<tr><th style="${th}">${escHtml(h)}</th><td style="${td}">${escHtml(rows[0][i])}</td></tr>`)
-      .join("");
-  } else {
-    // many rows (weekly / module ...) -> normal table
-    table =
-      `<tr>${headers.map((h) => `<th style="${th}">${escHtml(h)}</th>`).join("")}</tr>` +
-      rows.map((r) => `<tr>${r.map((v) => `<td style="${td}">${escHtml(v)}</td>`).join("")}</tr>`).join("");
+  // two-column "label | value" table (values must already be safe HTML)
+  const kvTable = (pairs) =>
+    `<table style="border-collapse:collapse;margin:0 0 8px;">` +
+    pairs
+      .map(([k, v]) => `<tr><td style="${labelCell}">${escHtml(k)}</td><td style="${valueCell}">${v}</td></tr>`)
+      .join("") +
+    `</table>`;
+
+  const isScorecard = headers.includes("Overall") && headers.includes("Grade");
+
+  // ───────────── Scorecard layout (matches the sample mail) ─────────────
+  if (isScorecard) {
+    const up = String(batch_no || "").toUpperCase();
+    const course =
+      up.includes("PDFT") || up.startsWith("PD") ? "Physical Design"
+      : up.includes("DVFT") || up.startsWith("DV") ? "Design Verification"
+      : "";
+    const title = course
+      ? `Course Performance Summary for ${course} (${batch_no})`
+      : `Course Performance Summary (${batch_no})`;
+
+    const row = rows[0];
+    const val = (label) => {
+      const i = headers.indexOf(label);
+      return i >= 0 ? row[i] : "—";
+    };
+
+    // Component marks only (group averages / overall / grade / remarks are shown elsewhere or hidden)
+    const SKIP = ["Group 1 Avg", "Group 2 Avg", "Theory Group", "Overall", "Grade", "Certification", "Placement", "Remarks"];
+    const scorePairs = headers
+      .map((h, i) => [h, row[i]])
+      .filter(([h]) => !SKIP.includes(h))
+      .map(([h, v]) => [`${h} (%)`, escHtml(v)]);
+
+    const scoreTable = kvTable([
+      ["Name", escHtml(name || "")],
+      ["Email ID", `<a href="mailto:${escHtml(email)}">${escHtml(email)}</a>`],
+      ...scorePairs,
+    ]);
+
+    const overallTable = kvTable([
+      ["Overall Course Percentage (%)", escHtml(String(val("Overall")).replace(/%$/, ""))],
+      ["Course Grade", escHtml(val("Grade"))],
+      ["Eligibility for Certification", escHtml(val("Certification"))],
+      ["Eligibility for Placement", escHtml(val("Placement"))],
+    ]);
+
+    return `
+      <div style="${FONT}">
+        <p>Dear ${escHtml(name || "Learner")},</p>
+        <p>Greetings from <b>ChipEdge Technologies!</b></p>
+        <p>Please find below your <b>${escHtml(title)}</b>.</p>
+        <p>Kindly go through your grades carefully. These scores will be considered for your Certification and eligibility towards Placement.</p>
+
+        <h3 style="${h3}">Score Summary</h3>
+        ${scoreTable}
+
+        <h3 style="${h3}">Overall Course Progress Summary</h3>
+        ${overallTable}
+
+        <p style="margin:22px 0 4px;"><b>Note:</b></p>
+        <ul style="margin:4px 0 0;padding-left:28px;">
+          <li><b>Certification Eligibility:</b> 70% and above in Overall Course Percentage</li>
+          <li><b>Eligibility for Placement Assistance:</b> 80% and above in Overall Course Percentage and 70% and above in Final Project and Viva</li>
+          <li>If you notice any discrepancies or have any questions, please revert back to the same email within <b>48 hours</b>. Queries raised after this timeframe will not be entertained.</li>
+        </ul>
+      </div>`;
   }
 
+  // ───────────── Other assessments (weekly / module / final ...) ─────────────
+  const table =
+    `<table style="border-collapse:collapse;">` +
+    `<tr>${headers.map((h) => `<td style="${labelCell}">${escHtml(h)}</td>`).join("")}</tr>` +
+    rows.map((r) => `<tr>${r.map((v) => `<td style="${valueCell}">${escHtml(v)}</td>`).join("")}</tr>`).join("") +
+    `</table>`;
+
   return `
-    <div style="font-family:Arial,sans-serif;color:#1a1f36;">
-      <p>Hi ${escHtml(name || "Learner")},</p>
-      <p>Here are your <b>${escHtml(assessment_label)}</b> marks for batch <b>${escHtml(batch_no)}</b>:</p>
-      <table style="border-collapse:collapse;">${table}</table>
-      <p style="margin-top:16px;">Regards,<br/>Training Team</p>
+    <div style="${FONT}">
+      <p>Dear ${escHtml(name || "Learner")},</p>
+      <p>Greetings from <b>ChipEdge Technologies!</b></p>
+      <p>Please find below your <b>${escHtml(assessment_label)}</b> marks for batch <b>${escHtml(batch_no)}</b>.</p>
+      ${table}
+      <p style="margin-top:22px;">If you notice any discrepancies or have any questions, please revert back to the same email within <b>48 hours</b>. Queries raised after this timeframe will not be entertained.</p>
     </div>`;
 }
 
@@ -11189,7 +11255,7 @@ app.post("/api/marks/send-email", async (req, res) => {
       }
       jobs.push({
         email,
-        subject: `Your ${assessment_label} marks — Batch ${batch_no}`,
+        subject: `Course Performance Summary Batch ${batch_no}`,
         html: buildMarksEmailHtml({ name: r.name, batch_no, assessment_label, headers: r.headers, rows: r.rows }),
       });
     }
