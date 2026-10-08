@@ -11292,4 +11292,110 @@ app.post("/api/marks/send-email", async (req, res) => {
   }
 });
 
+// ─── Announcement email: one individual mail per learner, many batches ────
+const ANNOUNCE_EMAIL_ROLES = ["admin", "manager", "coordinator", "corrdinator", "trainer"];
+
+const linkify = (escaped) =>
+  escaped.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" style="color:#3d5afe;">$1</a>');
+
+function buildAnnouncementEmail({ name, subject, message, messageType, batch_no }) {
+  const FONT = "font-family:Arial,Helvetica,sans-serif;color:#1a1f36;font-size:14px;line-height:1.5;";
+  let body;
+
+  if (messageType === "html") {
+    body = String(message);                              // staff-written HTML, used as is
+  } else {
+    body = `<p>${linkify(escHtml(message)).replace(/\r?\n/g, "<br/>")}</p>`;
+    if (messageType === "link") {
+      const first = String(message).match(/https?:\/\/[^\s<]+/);
+      if (first) {
+        body += `<p><a href="${escHtml(first[0])}" style="display:inline-block;padding:10px 18px;background:#3d5afe;color:#fff;text-decoration:none;border-radius:6px;font-weight:bold;">Open link</a></p>`;
+      }
+    }
+  }
+
+  const html = `
+    <div style="${FONT}">
+      <p>Dear ${escHtml(name || "Learner")},</p>
+      <p>Greetings from <b>ChipEdge Technologies!</b></p>
+      <h3 style="font-size:16px;margin:18px 0 8px;">${escHtml(subject)}</h3>
+      ${body}
+      <p style="margin-top:22px;">Regards,<br/><b>Training Team</b></p>
+      <p style="font-size:11px;color:#6b7280;">Batch: ${escHtml(batch_no)}</p>
+    </div>`;
+
+  const plain =
+    messageType === "html" ? String(message).replace(/<[^>]+>/g, "") : String(message);
+  const text = `Dear ${name || "Learner"},\n\nGreetings from ChipEdge Technologies!\n\n${subject}\n\n${plain}\n\nRegards,\nTraining Team`;
+
+  return { html, text };
+}
+
+app.post("/api/announcement/send-batches", async (req, res) => {
+  try {
+    const { subject, message, messageType, role, recipients } = req.body || {};
+
+    if (!subject?.trim() || !message?.trim()) {
+      return res.status(400).json({ error: "Subject and message are required" });
+    }
+    if (!ANNOUNCE_EMAIL_ROLES.includes((role || "").toString().trim().toLowerCase())) {
+      return res.status(403).json({ error: "You are not allowed to send announcements" });
+    }
+    if (!Array.isArray(recipients) || recipients.length === 0) {
+      return res.status(400).json({ error: "No recipients provided" });
+    }
+    if (recipients.length > 100) {
+      return res.status(400).json({ error: "Too many recipients in one request (max 100)" });
+    }
+    const type = ["text", "html", "link"].includes(messageType) ? messageType : "text";
+
+    // Only mail learners who really belong to the batch they are listed under
+    const batchList = [...new Set(recipients.map((r) => String(r?.batch_no || "").trim()).filter(Boolean))];
+    if (!batchList.length) return res.status(400).json({ error: "batch_no is required" });
+
+    const { data: learners, error: lErr } = await supabase
+      .from("learners_data")
+      .select("email, batch_no")
+      .in("batch_no", batchList);
+    if (lErr) throw lErr;
+    const valid = new Set((learners || []).map((l) => `${l.batch_no}|${(l.email || "").trim().toLowerCase()}`));
+
+    const skipped = [];
+    const seen = new Set();
+    const jobs = [];
+    for (const r of recipients) {
+      const email = (r?.email || "").trim();
+      const batch = String(r?.batch_no || "").trim();
+      const key = email.toLowerCase();
+      if (!email || !valid.has(`${batch}|${key}`) || seen.has(key)) {
+        skipped.push(email || "(no email)");
+        continue;
+      }
+      seen.add(key);
+      const { html, text } = buildAnnouncementEmail({
+        name: r.name, subject: subject.trim(), message, messageType: type, batch_no: batch,
+      });
+      jobs.push({ email, subject: `[${batch}] ${subject.trim()}`, html, text });
+    }
+
+    let sent = 0;
+    const failures = [];
+    for (let i = 0; i < jobs.length; i += 5) {
+      const chunk = jobs.slice(i, i + 5);
+      const results = await Promise.all(
+        chunk.map((j) => sendRawEmail({ to: j.email, subject: j.subject, html: j.html, text: j.text }))
+      );
+      results.forEach((r, idx) => {
+        if (r?.success) sent++;
+        else failures.push({ email: chunk[idx].email, error: r?.error || "send failed" });
+      });
+    }
+
+    return res.json({ success: true, sent, failed: failures.length, skipped, failures });
+  } catch (err) {
+    console.error("Announcement send error:", err);
+    return res.status(500).json({ error: err.message || "Failed to send announcement" });
+  }
+});
+
 export default app;
