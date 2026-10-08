@@ -21,6 +21,12 @@ import {
   CircularProgress,
   Chip,
   TextField,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Checkbox,
+  FormControlLabel,
 } from "@mui/material";
 import {
   Download         as DownloadIcon,
@@ -38,7 +44,6 @@ import {
   LockOpen         as LockOpenIcon,
   Lock             as LockIcon,
   Email            as EmailIcon,
-  Dialog, DialogTitle, DialogContent, DialogActions, Checkbox, FormControlLabel,
 } from "@mui/icons-material";
 
 const API_BASE =
@@ -167,6 +172,9 @@ function abOverall(val) {
 
 /* Tolerates the "Corrdinator" typo that exists in the internal_users table. */
 const SCORECARD_EDIT_ROLES = ["admin", "manager", "coordinator", "corrdinator"];
+
+/* Roles allowed to email marks to learners. */
+const SEND_EMAIL_ROLES = ["admin", "manager", "coordinator", "corrdinator"];
 
 /* The active LoginPage stores under "userSession"; an older flow uses "user". */
 function getSessionUser() {
@@ -724,9 +732,11 @@ export default function MarksDashboard({ user }) {
   const [remarksDraft, setRemarksDraft] = useState({});    // { email: remarks }
   const [showErrors,   setShowErrors]   = useState(false);
   const [saving,       setSaving]       = useState(false);
-  const [emailing, setEmailing] = useState(false);
+
+  /* ── Email-to-learners state ── */
+  const [emailing,        setEmailing]        = useState(false);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
-  const [emailSel,        setEmailSel]        = useState({});   // { email: true/false }
+  const [emailSel,        setEmailSel]        = useState({});    // { email: true/false }
   const [emailIsUpdate,   setEmailIsUpdate]   = useState(false);
   const [emailNote,       setEmailNote]       = useState("");
 
@@ -746,6 +756,9 @@ export default function MarksDashboard({ user }) {
 
   const scorecardKind    = isDvft ? "dvft" : "pdft";
   const canEditScorecard = SCORECARD_EDIT_ROLES.includes(
+    (activeUser?.role || "").toString().trim().toLowerCase()
+  );
+  const canSendEmails = SEND_EMAIL_ROLES.includes(
     (activeUser?.role || "").toString().trim().toLowerCase()
   );
 
@@ -953,12 +966,14 @@ export default function MarksDashboard({ user }) {
         throw new Error(res.data.error || "The server did not save the changes");
       }
 
-      const saved = res?.data?.saved ?? dirtyCount;
-      const savedEmails = [...dirtyEmails];          // who was just changed
+      const saved       = res?.data?.saved ?? dirtyCount;
+      const savedEmails = [...dirtyEmails];   // the learners who were just changed
       resetScorecardDrafts();
       await fetchMarks();   // reload so the saved overrides come back merged
       setMessage(`✅ Saved changes for ${saved} learner${saved !== 1 ? "s" : ""}`);
-      openEmailDialog(savedEmails); 
+
+      /* Offer to email ONLY the learners whose marks were just changed. */
+      if (canSendEmails) openEmailDialog(savedEmails);
     } catch (err) {
       const d = err?.response?.data;
       /* The backend returns details + hint on a storage failure — showing them
@@ -998,10 +1013,31 @@ export default function MarksDashboard({ user }) {
     remarksError: email => showErrors && !!edits[email] && !remarksFor(email).trim(),
   };
 
-    /* ── Send each learner only their own marks ── */
-  const SEND_EMAIL_ROLES = ["admin", "manager", "coordinator", "corrdinator"];
-  const canSendEmails = SEND_EMAIL_ROLES.includes((activeUser?.role || "").toString().trim().toLowerCase());
+  /* ── Column definitions for non-scorecard tables ── */
+  const getNonScorecardColumns = () => {
+    if (!marksData.length || isScorecard) return [];
+    const sample = marksData[0];
+    const cols = [
+      { key: "learner_name",  label: "Name"  },
+      { key: "learner_email", label: "Email" },
+      { key: "batch_no",      label: "Batch" },
+    ];
+    if (assessmentType === "module") {
+      if (sample.module_no !== undefined) cols.push({ key: "module_no", label: "Module" });
+    } else {
+      if (sample.week_no !== undefined) cols.push({ key: "week_no", label: "Week" });
+    }
+    cols.push(
+      { key: "assessment_date", label: "Date"       },
+      { key: "topic_name",      label: "Assessment" },
+      { key: "out_off",         label: "Out Of"     },
+      { key: "points",          label: "Points"     },
+      { key: "percentage",      label: "Percentage" },
+    );
+    return cols;
+  };
 
+  /* ─── Send each learner ONLY their own marks ─────────────────────────────── */
   const pctTxt = v =>
     v === "AB" || v === null || v === undefined || v === "" ? (v || "—") : `${parseFloat(v).toFixed(2)}%`;
   const overallTxt = v => {
@@ -1015,40 +1051,40 @@ export default function MarksDashboard({ user }) {
       return displayScorecard.map(r => {
         const pairs = isDvft
           ? [
-              ["Intermediate", pctTxt(ab(r.intermediate))],
-              ["Digital",      pctTxt(ab(r.breakdown?.digital))],
-              ["Verilog",      pctTxt(ab(r.breakdown?.verilog))],
-              ["Group 1 Avg",  pctTxt(ab(r.dvGroup1))],
-              ["SV",           pctTxt(ab(r.breakdown?.sv))],
-              ["UVM",          pctTxt(ab(r.breakdown?.uvm))],
-              ["Python",       pctTxt(ab(r.breakdown?.python))],
-              ["Group 2 Avg",  pctTxt(ab(r.dvGroup2))],
-              ["Project",      pctTxt(ab(r.project))],
-              ["Viva",         pctTxt(ab(r.viva))],
-              ["Overall",      overallTxt(r.overall)],
-              ["Grade",        r.grade],
+              ["Intermediate",  pctTxt(ab(r.intermediate))],
+              ["Digital",       pctTxt(ab(r.breakdown?.digital))],
+              ["Verilog",       pctTxt(ab(r.breakdown?.verilog))],
+              ["Group 1 Avg",   pctTxt(ab(r.dvGroup1))],
+              ["SV",            pctTxt(ab(r.breakdown?.sv))],
+              ["UVM",           pctTxt(ab(r.breakdown?.uvm))],
+              ["Python",        pctTxt(ab(r.breakdown?.python))],
+              ["Group 2 Avg",   pctTxt(ab(r.dvGroup2))],
+              ["Project",       pctTxt(ab(r.project))],
+              ["Viva",          pctTxt(ab(r.viva))],
+              ["Overall",       overallTxt(r.overall)],
+              ["Grade",         r.grade],
               ["Certification", r.certification],
-              ["Placement",    r.placement],
+              ["Placement",     r.placement],
             ]
           : [
-              ["Intermediate", pctTxt(ab(r.intermediate))],
-              ["Digital",      pctTxt(ab(r.breakdown?.digital))],
-              ["CMOS",         pctTxt(ab(r.breakdown?.cmos))],
-              ["TCL",          pctTxt(ab(r.breakdown?.tcl))],
-              ["Theory Group", pctTxt(ab(r.theory))],
-              ["Physical",     pctTxt(ab(r.breakdown?.physical))],
-              ["Project",      pctTxt(ab(r.project))],
-              ["Viva",         pctTxt(ab(r.viva))],
-              ["Overall",      overallTxt(r.overall)],
-              ["Grade",        r.grade],
+              ["Intermediate",  pctTxt(ab(r.intermediate))],
+              ["Digital",       pctTxt(ab(r.breakdown?.digital))],
+              ["CMOS",          pctTxt(ab(r.breakdown?.cmos))],
+              ["TCL",           pctTxt(ab(r.breakdown?.tcl))],
+              ["Theory Group",  pctTxt(ab(r.theory))],
+              ["Physical",      pctTxt(ab(r.breakdown?.physical))],
+              ["Project",       pctTxt(ab(r.project))],
+              ["Viva",          pctTxt(ab(r.viva))],
+              ["Overall",       overallTxt(r.overall)],
+              ["Grade",         r.grade],
               ["Certification", r.certification],
-              ["Placement",    r.placement],
+              ["Placement",     r.placement],
             ];
         const remarks = remarksFor(r.email);
         if (remarks) pairs.push(["Remarks", remarks]);
         return {
-          email: r.email,
-          name:  r.name,
+          email:   r.email,
+          name:    r.name,
           headers: pairs.map(p => p[0]),
           rows:    [pairs.map(p => p[1] ?? "—")],
         };
@@ -1073,7 +1109,7 @@ export default function MarksDashboard({ user }) {
     return Object.values(byLearner);
   };
 
-    /* Opens the picker. preselect = emails to tick (after a save), or null = everyone. */
+  /* Opens the picker. preselect = emails to tick (after a save), or null = everyone. */
   const openEmailDialog = (preselect) => {
     const sel = {};
     buildEmailRecipients().forEach(r => {
@@ -1123,30 +1159,6 @@ export default function MarksDashboard({ user }) {
     } finally {
       setEmailing(false);
     }
-  };
-
-  /* ── Column definitions for non-scorecard tables ── */
-  const getNonScorecardColumns = () => {
-    if (!marksData.length || isScorecard) return [];
-    const sample = marksData[0];
-    const cols = [
-      { key: "learner_name",  label: "Name"  },
-      { key: "learner_email", label: "Email" },
-      { key: "batch_no",      label: "Batch" },
-    ];
-    if (assessmentType === "module") {
-      if (sample.module_no !== undefined) cols.push({ key: "module_no", label: "Module" });
-    } else {
-      if (sample.week_no !== undefined) cols.push({ key: "week_no", label: "Week" });
-    }
-    cols.push(
-      { key: "assessment_date", label: "Date"       },
-      { key: "topic_name",      label: "Assessment" },
-      { key: "out_off",         label: "Out Of"     },
-      { key: "points",          label: "Points"     },
-      { key: "percentage",      label: "Percentage" },
-    );
-    return cols;
   };
 
   /* ── Excel export ── */
@@ -1320,6 +1332,8 @@ export default function MarksDashboard({ user }) {
                   </Button>
                 </>
               )}
+
+              {/* ── Send marks by email — opens the learner picker ── */}
               {canSendEmails && (
                 <Button variant="contained" onClick={handleSendEmailClick} disabled={emailing || saving}
                   startIcon={emailing ? <CircularProgress size={14} color="inherit" /> : <EmailIcon sx={{ fontSize: 16 }} />}
@@ -1327,6 +1341,7 @@ export default function MarksDashboard({ user }) {
                   {emailing ? "Sending…" : "Send Email"}
                 </Button>
               )}
+
               <Button variant="outlined" startIcon={<DownloadIcon sx={{ fontSize: 16 }} />} onClick={downloadExcel}
                 sx={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 12, borderRadius: "10px", textTransform: "none", borderColor: TOKENS.border, color: TOKENS.textSub, "&:hover": { borderColor: TOKENS.accent, color: TOKENS.accent, background: TOKENS.accentLight } }}>
                 Excel
@@ -1471,48 +1486,51 @@ export default function MarksDashboard({ user }) {
             </Box>
           );
         })()}
-              {(() => {
-        const candidates = emailDialogOpen ? buildEmailRecipients() : [];
-        const selCount   = candidates.filter(c => emailSel[c.email]).length;
-        return (
-          <Dialog open={emailDialogOpen} onClose={() => setEmailDialogOpen(false)} fullWidth maxWidth="sm">
-            <DialogTitle sx={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 800 }}>
-              Send marks by email
-            </DialogTitle>
-            <DialogContent dividers>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-                <Button size="small" onClick={() => setEmailSel(Object.fromEntries(candidates.map(c => [c.email, true])))}>Select all</Button>
-                <Button size="small" onClick={() => setEmailSel({})}>Clear</Button>
-                <Typography sx={{ ...labelSx, ml: "auto" }}>{selCount} of {candidates.length} selected</Typography>
-              </Box>
 
-              <Box sx={{ maxHeight: 300, overflowY: "auto", border: `1px solid ${TOKENS.border}`, borderRadius: "10px", mb: 2 }}>
-                {candidates.map(c => (
-                  <FormControlLabel key={c.email} sx={{ display: "flex", m: 0, px: 1 }}
-                    control={<Checkbox size="small" checked={!!emailSel[c.email]}
-                      onChange={e => setEmailSel(p => ({ ...p, [c.email]: e.target.checked }))} />}
-                    label={<Typography sx={{ fontSize: 13 }}>{c.name || "—"} · <span style={{ color: TOKENS.textSub }}>{c.email}</span></Typography>} />
-                ))}
-              </Box>
+        {/* ── Send marks by email — learner picker dialog ── */}
+        {(() => {
+          const candidates = emailDialogOpen ? buildEmailRecipients() : [];
+          const selCount   = candidates.filter(c => emailSel[c.email]).length;
+          return (
+            <Dialog open={emailDialogOpen} onClose={() => setEmailDialogOpen(false)} fullWidth maxWidth="sm">
+              <DialogTitle sx={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 800 }}>
+                Send marks by email
+              </DialogTitle>
+              <DialogContent dividers>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                  <Button size="small" onClick={() => setEmailSel(Object.fromEntries(candidates.map(c => [c.email, true])))}>Select all</Button>
+                  <Button size="small" onClick={() => setEmailSel({})}>Clear</Button>
+                  <Typography sx={{ ...labelSx, ml: "auto" }}>{selCount} of {candidates.length} selected</Typography>
+                </Box>
 
-              <FormControlLabel
-                control={<Checkbox checked={emailIsUpdate} onChange={e => setEmailIsUpdate(e.target.checked)} />}
-                label="These are UPDATED marks (correction / revaluation / retest)" />
-              {emailIsUpdate && (
-                <TextField fullWidth size="small" sx={{ mt: 1 }} label="Reason (optional)"
-                  placeholder="e.g. Revaluation completed" value={emailNote}
-                  onChange={e => setEmailNote(e.target.value)} inputProps={{ maxLength: 300 }} />
-              )}
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setEmailDialogOpen(false)}>Cancel</Button>
-              <Button variant="contained" disabled={!selCount || emailing} onClick={sendMarksEmails}>
-                Send to {selCount}
-              </Button>
-            </DialogActions>
-          </Dialog>
-        );
-      })()}
+                <Box sx={{ maxHeight: 300, overflowY: "auto", border: `1px solid ${TOKENS.border}`, borderRadius: "10px", mb: 2 }}>
+                  {candidates.map(c => (
+                    <FormControlLabel key={c.email} sx={{ display: "flex", m: 0, px: 1 }}
+                      control={<Checkbox size="small" checked={!!emailSel[c.email]}
+                        onChange={e => setEmailSel(p => ({ ...p, [c.email]: e.target.checked }))} />}
+                      label={<Typography sx={{ fontSize: 13 }}>{c.name || "—"} · <span style={{ color: TOKENS.textSub }}>{c.email}</span></Typography>} />
+                  ))}
+                </Box>
+
+                <FormControlLabel
+                  control={<Checkbox checked={emailIsUpdate} onChange={e => setEmailIsUpdate(e.target.checked)} />}
+                  label="These are UPDATED marks (correction / revaluation / retest)" />
+                {emailIsUpdate && (
+                  <TextField fullWidth size="small" sx={{ mt: 1 }} label="Reason (optional)"
+                    placeholder="e.g. Revaluation completed" value={emailNote}
+                    onChange={e => setEmailNote(e.target.value)} inputProps={{ maxLength: 300 }} />
+                )}
+              </DialogContent>
+              <DialogActions>
+                <Button onClick={() => setEmailDialogOpen(false)}>Cancel</Button>
+                <Button variant="contained" disabled={!selCount || emailing} onClick={sendMarksEmails}>
+                  Send to {selCount}
+                </Button>
+              </DialogActions>
+            </Dialog>
+          );
+        })()}
+
       </Box>
     </Box>
   );
