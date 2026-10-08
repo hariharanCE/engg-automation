@@ -11127,7 +11127,7 @@ const escHtml = (s) =>
 function buildMarksEmailHtml({ name, email, batch_no, assessment_label, headers, rows, isUpdate, note }) {
   const updateBanner = isUpdate
     ? `<p style="background:#fff8e1;border-left:4px solid #f59e0b;padding:8px 12px;">
-         <b>Updated marks:</b> your marks have been revised${note ? ` — ${escHtml(note)}` : ""}.
+         <b>Updated marks:</b> Your marks has been revised/updated${note ? ` — ${escHtml(note)}` : ""}.
          Please disregard any earlier version.</p>`
     : "";
   const FONT = "font-family:Arial,Helvetica,sans-serif;color:#1a1f36;font-size:14px;";
