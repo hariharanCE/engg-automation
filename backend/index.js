@@ -11166,7 +11166,6 @@ function buildMarksEmailHtml({ name, email, batch_no, assessment_label, headers,
 
     const scoreTable = kvTable([
       ["Name", escHtml(name || "")],
-      ["Email ID", `<a href="mailto:${escHtml(email)}">${escHtml(email)}</a>`],
       ...scorePairs,
     ]);
 
