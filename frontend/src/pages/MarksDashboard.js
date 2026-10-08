@@ -38,6 +38,7 @@ import {
   LockOpen         as LockOpenIcon,
   Lock             as LockIcon,
   Email            as EmailIcon,
+  Dialog, DialogTitle, DialogContent, DialogActions, Checkbox, FormControlLabel,
 } from "@mui/icons-material";
 
 const API_BASE =
@@ -724,6 +725,10 @@ export default function MarksDashboard({ user }) {
   const [showErrors,   setShowErrors]   = useState(false);
   const [saving,       setSaving]       = useState(false);
   const [emailing, setEmailing] = useState(false);
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [emailSel,        setEmailSel]        = useState({});   // { email: true/false }
+  const [emailIsUpdate,   setEmailIsUpdate]   = useState(false);
+  const [emailNote,       setEmailNote]       = useState("");
 
   /* Prefer the prop; fall back to the stored session so role detection works
    * regardless of which login flow ran. */
@@ -949,9 +954,11 @@ export default function MarksDashboard({ user }) {
       }
 
       const saved = res?.data?.saved ?? dirtyCount;
+      const savedEmails = [...dirtyEmails];          // who was just changed
       resetScorecardDrafts();
       await fetchMarks();   // reload so the saved overrides come back merged
       setMessage(`✅ Saved changes for ${saved} learner${saved !== 1 ? "s" : ""}`);
+      openEmailDialog(savedEmails); 
     } catch (err) {
       const d = err?.response?.data;
       /* The backend returns details + hint on a storage failure — showing them
@@ -1066,27 +1073,44 @@ export default function MarksDashboard({ user }) {
     return Object.values(byLearner);
   };
 
-  const sendMarksEmails = async () => {
-    if (emailing) return;
+    /* Opens the picker. preselect = emails to tick (after a save), or null = everyone. */
+  const openEmailDialog = (preselect) => {
+    const sel = {};
+    buildEmailRecipients().forEach(r => {
+      sel[r.email] = preselect ? preselect.includes(r.email) : true;
+    });
+    setEmailSel(sel);
+    setEmailIsUpdate(!!preselect);
+    setEmailNote("");
+    setEmailDialogOpen(true);
+  };
+
+  const handleSendEmailClick = () => {
     if (isScorecard && dirtyCount > 0) {
       setMessage("⚠️ Save or discard your scorecard changes before sending emails");
       return;
     }
-    const recipients = buildEmailRecipients();
-    if (!recipients.length) { setMessage("⚠️ No learners with an email to send to"); return; }
+    openEmailDialog(null);
+  };
+
+  const sendMarksEmails = async () => {
+    if (emailing) return;
+    const chosen = buildEmailRecipients().filter(r => emailSel[r.email]);
+    if (!chosen.length) { setMessage("⚠️ Select at least one learner"); return; }
 
     const label = isScorecard ? "Scorecard"
       : assessmentType.charAt(0).toUpperCase() + assessmentType.slice(1) + " Assessment";
 
-    if (!window.confirm(`Send each learner their own ${label} marks?\n\n${recipients.length} email${recipients.length !== 1 ? "s" : ""} will be sent for batch ${batchNo}.`)) return;
-
+    setEmailDialogOpen(false);
     setEmailing(true); setMessage("");
     try {
       const res = await axios.post(`${API_BASE}/api/marks/send-email`, {
         batch_no: batchNo,
         assessment_label: label,
         role: activeUser?.role || "",
-        recipients,
+        recipients: chosen,
+        is_update: emailIsUpdate,
+        note: emailNote.trim(),
       });
       const { sent = 0, failed = 0, skipped = [] } = res.data || {};
       if (failed || skipped.length) {
@@ -1297,7 +1321,7 @@ export default function MarksDashboard({ user }) {
                 </>
               )}
               {canSendEmails && (
-                <Button variant="contained" onClick={sendMarksEmails} disabled={emailing || saving}
+                <Button variant="contained" onClick={handleSendEmailClick} disabled={emailing || saving}
                   startIcon={emailing ? <CircularProgress size={14} color="inherit" /> : <EmailIcon sx={{ fontSize: 16 }} />}
                   sx={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 12, borderRadius: "10px", textTransform: "none", px: 2.5, background: TOKENS.accent, "&:hover": { background: "#2a3fd4" }, "&:disabled": { opacity: 0.6 } }}>
                   {emailing ? "Sending…" : "Send Email"}
@@ -1447,6 +1471,48 @@ export default function MarksDashboard({ user }) {
             </Box>
           );
         })()}
+              {(() => {
+        const candidates = emailDialogOpen ? buildEmailRecipients() : [];
+        const selCount   = candidates.filter(c => emailSel[c.email]).length;
+        return (
+          <Dialog open={emailDialogOpen} onClose={() => setEmailDialogOpen(false)} fullWidth maxWidth="sm">
+            <DialogTitle sx={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 800 }}>
+              Send marks by email
+            </DialogTitle>
+            <DialogContent dividers>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                <Button size="small" onClick={() => setEmailSel(Object.fromEntries(candidates.map(c => [c.email, true])))}>Select all</Button>
+                <Button size="small" onClick={() => setEmailSel({})}>Clear</Button>
+                <Typography sx={{ ...labelSx, ml: "auto" }}>{selCount} of {candidates.length} selected</Typography>
+              </Box>
+
+              <Box sx={{ maxHeight: 300, overflowY: "auto", border: `1px solid ${TOKENS.border}`, borderRadius: "10px", mb: 2 }}>
+                {candidates.map(c => (
+                  <FormControlLabel key={c.email} sx={{ display: "flex", m: 0, px: 1 }}
+                    control={<Checkbox size="small" checked={!!emailSel[c.email]}
+                      onChange={e => setEmailSel(p => ({ ...p, [c.email]: e.target.checked }))} />}
+                    label={<Typography sx={{ fontSize: 13 }}>{c.name || "—"} · <span style={{ color: TOKENS.textSub }}>{c.email}</span></Typography>} />
+                ))}
+              </Box>
+
+              <FormControlLabel
+                control={<Checkbox checked={emailIsUpdate} onChange={e => setEmailIsUpdate(e.target.checked)} />}
+                label="These are UPDATED marks (correction / revaluation / retest)" />
+              {emailIsUpdate && (
+                <TextField fullWidth size="small" sx={{ mt: 1 }} label="Reason (optional)"
+                  placeholder="e.g. Revaluation completed" value={emailNote}
+                  onChange={e => setEmailNote(e.target.value)} inputProps={{ maxLength: 300 }} />
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setEmailDialogOpen(false)}>Cancel</Button>
+              <Button variant="contained" disabled={!selCount || emailing} onClick={sendMarksEmails}>
+                Send to {selCount}
+              </Button>
+            </DialogActions>
+          </Dialog>
+        );
+      })()}
       </Box>
     </Box>
   );

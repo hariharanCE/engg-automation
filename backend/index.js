@@ -11124,7 +11124,12 @@ const escHtml = (s) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
   );
 
-function buildMarksEmailHtml({ name, email, batch_no, assessment_label, headers, rows }) {
+function buildMarksEmailHtml({ name, email, batch_no, assessment_label, headers, rows, isUpdate, note }) {
+  const updateBanner = isUpdate
+    ? `<p style="background:#fff8e1;border-left:4px solid #f59e0b;padding:8px 12px;">
+         <b>Updated marks:</b> your marks have been revised${note ? ` — ${escHtml(note)}` : ""}.
+         Please disregard any earlier version.</p>`
+    : "";
   const FONT = "font-family:Arial,Helvetica,sans-serif;color:#1a1f36;font-size:14px;";
   const labelCell = "padding:6px 8px;border:1px solid #000;background:#f2f2f2;font-weight:bold;font-size:13px;white-space:nowrap;";
   const valueCell = "padding:6px 8px;border:1px solid #000;font-size:13px;";
@@ -11180,6 +11185,7 @@ function buildMarksEmailHtml({ name, email, batch_no, assessment_label, headers,
       <div style="${FONT}">
         <p>Dear ${escHtml(name || "Learner")},</p>
         <p>Greetings from <b>ChipEdge Technologies!</b></p>
+        ${updateBanner}
         <p>Please find below your <b>${escHtml(title)}</b>.</p>
         <p>Kindly go through your grades carefully. These scores will be considered for your Certification and eligibility towards Placement.</p>
 
@@ -11218,7 +11224,7 @@ function buildMarksEmailHtml({ name, email, batch_no, assessment_label, headers,
 
 app.post("/api/marks/send-email", async (req, res) => {
   try {
-    const { batch_no, assessment_label, role, recipients } = req.body || {};
+    const { batch_no, assessment_label, role, recipients, is_update, note } = req.body || {};
 
     if (!batch_no) return res.status(400).json({ error: "batch_no is required" });
     if (!MARKS_EMAIL_ROLES.includes((role || "").toString().trim().toLowerCase())) {
@@ -11255,8 +11261,13 @@ app.post("/api/marks/send-email", async (req, res) => {
       }
       jobs.push({
         email,
-        subject: `Course Performance Summary Batch ${batch_no}`,
-        html: buildMarksEmailHtml({ name: r.name, batch_no, assessment_label, headers: r.headers, rows: r.rows }),
+        subject: `${is_update ? "Updated: " : ""}Course Performance Summary Batch - ${batch_no}`,
+        html: buildMarksEmailHtml({
+          name: r.name, email, batch_no, assessment_label,
+          headers: r.headers, rows: r.rows,
+          isUpdate: !!is_update,
+          note: (note || "").toString().slice(0, 300),
+        }),
       });
     }
 
