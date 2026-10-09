@@ -34,7 +34,7 @@ import LeaveApply from "./pages/LeaveApply";
 import CoursePlannerGenerator from "./pages/CoursePlannerGenerator";
 import GeneratedCoursePlanners from "./pages/GeneratedCoursePlanners";
 import ProfileDashboard from "./pages/ProfileDashboard";
-import MockInterviewDashboard from "./components/MockInterviewDashboard";
+import MockInterviewDashboard from "./pages/MockInterviewDashboard";
 import { initPush, teardownPush, bindHardwareBack } from "./push/pushClient";
 import { initWebPush, teardownWebPush } from "./push/webPush";
 
