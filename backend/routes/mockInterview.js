@@ -287,7 +287,7 @@ function buildEmail({ session, r, note }) {
         <li>Ratings are given on a scale of <b>1 to 5</b>, where 1 is the lowest and 5 is the highest.</li>
         <li>If you notice any discrepancies or have any questions, please revert back to the same email within <b>48 hours</b>.</li>
       </ul>
-      <p style="margin-top:22px;">Regards,<br/><b>Training Team</b></p>
+      <p style="margin-top:22px;"><b>Regards</b>,<br/>Training & Delivery Team,<br/>ChipEdge Technologies Pvt. Ltd.</p>
     </div>`;
 
   const text =
@@ -296,7 +296,7 @@ function buildEmail({ session, r, note }) {
     SKILLS.map((s) => `${s.label}: ${r[s.key]}/5`).join("\n") +
     `\nAverage Rating: ${Math.round(Number(r.average_rating))}/5\n\n` +
     `Interviewer Remarks: ${r.remarks || "-"}\nAreas of Improvement: ${r.areas_of_improvement || "-"}\n\n` +
-    `${note ? note + "\n\n" : ""}Regards,\nTraining Team`;
+    `${note ? note + "\n\n" : ""}Regards,\nTraining & Delivery Team,\nChipEdge Technologies Pvt. Ltd.`;
 
   return { html, text };
 }

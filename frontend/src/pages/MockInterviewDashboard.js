@@ -676,7 +676,7 @@ export default function MockInterviewDashboard() {
             </FormControl>
             <TextField size="small" label="Course" value={course} onChange={e => setHeader(setCourse)(e.target.value)} sx={inputSx} />
             <TextField size="small" label="Venue" value={venue} onChange={e => setHeader(setVenue)(e.target.value)} placeholder="ChipEdge Office 4th Floor" sx={inputSx} />
-            <TextField size="small" label="Interviewer Name *" value={interviewer} onChange={e => setHeader(setInterviewer)(e.target.value)} placeholder="Mr. Obulesu" sx={inputSx} />
+            <TextField size="small" label="Interviewer Name *" value={interviewer} onChange={e => setHeader(setInterviewer)(e.target.value)} placeholder="Interviewer Name" sx={inputSx} />
 
             <TextField size="small" type="date" label="Date *" value={date} onChange={e => setHeader(setDate)(e.target.value)} InputLabelProps={{ shrink: true }} sx={inputSx} />
             <TextField size="small" type="time" label="Start Time" value={startTime} onChange={e => setHeader(setStartTime)(e.target.value)} InputLabelProps={{ shrink: true }} sx={inputSx} />

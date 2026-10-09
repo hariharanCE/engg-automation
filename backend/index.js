@@ -11203,6 +11203,8 @@ function buildMarksEmailHtml({ name, email, batch_no, assessment_label, headers,
           <li><b>Eligibility for Placement Assistance:</b> 80% and above in Overall Course Percentage and 70% and above in Final Project and Viva</li>
           <li>If you notice any discrepancies or have any questions, please revert back to the same email within <b>48 hours</b>. Queries raised after this timeframe will not be entertained.</li>
         </ul>
+        <br>
+        <p><b>Regards</b>,<br/>Training & Delivery Team,<br/>ChipEdge Technologies Pvt. Ltd.</p>
       </div>`;
   }
 
@@ -11220,6 +11222,8 @@ function buildMarksEmailHtml({ name, email, batch_no, assessment_label, headers,
       <p>Please find below your <b>${escHtml(assessment_label)}</b> marks for batch <b>${escHtml(batch_no)}</b>.</p>
       ${table}
       <p style="margin-top:22px;">If you notice any discrepancies or have any questions, please revert back to the same email within <b>48 hours</b>. Queries raised after this timeframe will not be entertained.</p>
+      <br>
+      <p><b>Regards</b>,<br/>Training & Delivery Team,<br/>ChipEdge Technologies Pvt. Ltd.</p>
     </div>`;
 }
 
@@ -11322,13 +11326,13 @@ function buildAnnouncementEmail({ name, subject, message, messageType, batch_no 
       <p>Greetings from <b>ChipEdge Technologies!</b></p>
       <h3 style="font-size:16px;margin:18px 0 8px;">${escHtml(subject)}</h3>
       ${body}
-      <p style="margin-top:22px;">Regards,<br/><b>Training Team</b></p>
+      <p style="margin-top:22px;">Regards</b>,<br/>Training & Delivery Team,<br/>ChipEdge Technologies Pvt. Ltd.</p>
       <p style="font-size:11px;color:#6b7280;">Batch: ${escHtml(batch_no)}</p>
     </div>`;
 
   const plain =
     messageType === "html" ? String(message).replace(/<[^>]+>/g, "") : String(message);
-  const text = `Dear ${name || "Learner"},\n\nGreetings from ChipEdge Technologies!\n\n${subject}\n\n${plain}\n\nRegards,\nTraining Team`;
+  const text = `Dear ${name || "Learner"},\n\nGreetings from ChipEdge Technologies!\n\n${subject}\n\n${plain}\n\nRegards,\nTraining & Delivery Team,\nChipEdge Technologies Pvt. Ltd.`;
 
   return { html, text };
 }
