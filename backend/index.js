@@ -37,6 +37,7 @@ import jwt from "jsonwebtoken";
 import holidaysRoutes from "./routes/holidaysRoutes.js";
 import internalUsersRoutes from "./routes/internalUsersRoutes.js";
 import coursePlannerRoutes from "./routes/coursePlanner.js";
+import mockInterviewRoutes from "./routes/mockInterview.js";
 import pushTokensRouter from "./routes/pushTokens.js";
 import { notify, getRoleEmails, getApproverEmails } from "./push/sendPush.js";
 
@@ -133,6 +134,7 @@ app.use(express.urlencoded({ extended: true }));
 // Mount routers
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/course-planner", coursePlannerRoutes);
+app.use("/api/mock-interview", mockInterviewRoutes);
 app.use("/api/push", pushTokensRouter);
 
 // =====================================================

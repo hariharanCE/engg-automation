@@ -34,6 +34,7 @@ import LeaveApply from "./pages/LeaveApply";
 import CoursePlannerGenerator from "./pages/CoursePlannerGenerator";
 import GeneratedCoursePlanners from "./pages/GeneratedCoursePlanners";
 import ProfileDashboard from "./pages/ProfileDashboard";
+import MockInterviewDashboard from "./components/MockInterviewDashboard";
 import { initPush, teardownPush, bindHardwareBack } from "./push/pushClient";
 import { initWebPush, teardownWebPush } from "./push/webPush";
 
@@ -53,6 +54,7 @@ const roleMenus = {
     { text: "Classroom Planner", path: "/schedule" },
     { text: "Attendance", path: "/attendance" }, // <-- added attendance menu
     { text: "Mark Entry", path: "/marks-entry" },
+    { text: "Mock Interview Dashboard", path: "/mock-interview" },
     { text: "Marks Dashboard", path: "/marks-dashboard" }, 
     { text: "Announcement", path: "/announcement" }, 
     { text: "Classroom Planner-2", path: "/classroom-planner" }, 
@@ -80,6 +82,7 @@ const roleMenus = {
     { text: "Classroom Planner", path: "/schedule" },
     { text: "Attendance", path: "/attendance" }, // <-- added attendance menu
     { text: "Mark Entry", path: "/marks-entry" }, 
+    { text: "Mock Interview Dashboard", path: "/mock-interview" },
     { text: "Announcement", path: "/announcement" }, 
     { text: "Manager Leave Dashboard", path: "/manager/leaves" },
     { text: "Upload Holidays", path: "/holiday-upload" },
@@ -94,6 +97,7 @@ const roleMenus = {
     { text: "Soft Skill Announcement", path: "/soft-skill-announcement" },
     { text: "Attendance", path: "/attendance" }, // <-- added attendance menu
     { text: "Mark Entry", path: "/marks-entry" },
+    { text: "Mock Interview Dashboard", path: "/mock-interview" },
     { text: "Trainer Leave Dashboard", path: "/trainer/leaves" },
     { text: "Marks Dashboard", path: "/marks/entry" },
     { text: "Course Planner Generator", path: "/course-planner-generator" },
@@ -105,6 +109,7 @@ const roleMenus = {
     { text: "Mail Status Check", path: "/mail-status" },
     { text: "Course Progress", path: "/course-progress" },
     { text: "Trainer Dashboards", path: "/trainer-dashboard" },
+    { text: "Mock Interview Dashboard", path: "/mock-interview" },
     { text: "Users Management", path: "/users" },
     { text: "Announcement", path: "/announcement" },
     { text: "Course Planner Generator", path: "/course-planner-generator" },
@@ -193,6 +198,8 @@ function getComponentForPath(path, login) {
       return <TrainerAssignmentDashboard user={login} />;
     case "/marks/entry":
       return <MarkEntryDashboard user={login} />;
+    case "/mock-interview":
+      return <MockInterviewDashboard user={login} />;
     case "/classroom-matrix":
       return <ClassroomMatrixDashboard user={login} />;
     case "/leave-apply":
