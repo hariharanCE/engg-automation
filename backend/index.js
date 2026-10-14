@@ -747,70 +747,52 @@ app.get('/api/modules-by-date', async (req, res) => {
   }
 });
 
+// Supabase returns at most 1000 rows per request — page through everything.
+async function fetchAllRows(makeQuery) {
+  const out = [];
+  const size = 1000;
+  for (let from = 0; ; from += size) {
+    const { data, error } = await makeQuery().range(from, from + size - 1);
+    if (error) throw error;
+    out.push(...(data || []));
+    if (!data || data.length < size) break;
+  }
+  return out;
+}
 
 // GET /api/learner-attendance - Fetch attendance by batch
-app.get('/api/learner-attendance', async (req, res) => {
+app.get("/api/learner-attendance", async (req, res) => {
   try {
     const { batch_no } = req.query;
-    
-    if (!batch_no) {
-      return res.status(400).json({ error: 'batch_no required' });
-    }
+    if (!batch_no) return res.status(400).json({ error: "batch_no required" });
 
-    console.log(`🔍 Processing batch: ${batch_no}`);
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 
-    const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+    const plannerRows = await fetchAllRows(() =>
+      supabase.from("course_planner_data").select("date").eq("batch_no", batch_no).order("date")
+    );
+    const teachingDates = [...new Set(plannerRows.map((r) => String(r.date).slice(0, 10)).filter(Boolean))].sort();
 
-    // 1️⃣ Get ALL sessions for batch
-    const { data: plannerData, error: plannerError } = await supabase
-      .from("course_planner_data")
-      .select("date, batch_no")
-      .eq("batch_no", batch_no)
-      .order("date");
-
-    if (plannerError) {
-      console.error("Planner error:", plannerError);
-      return res.status(500).json({ error: plannerError.message });
-    }
-
-    let totalBatchSessions = 0;
-    let sessionsTillToday = 0;
-
-    if (plannerData) {
-      const uniqueDates = [...new Set(plannerData.map(row => row.date))];
-      totalBatchSessions = uniqueDates.length;
-
-      // ✅ Count only sessions till today
-      const pastDates = uniqueDates.filter(date => date <= today);
-      sessionsTillToday = pastDates.length;
-
-      console.log(`📅 Total Batch Sessions: ${totalBatchSessions}`);
-      console.log(`📅 Sessions Till Today (${today}): ${sessionsTillToday}`);
-    }
-
-    // 2️⃣ Get ATTENDANCE data
-    const { data: attendanceData, error: attendanceError } = await supabase
-      .from("learner_attendance")
-      .select("learner_email, batch_no, date, session, status")
-      .eq("batch_no", batch_no);
-
-    if (attendanceError) {
-      console.error("Attendance error:", attendanceError);
-      return res.status(500).json({ error: attendanceError.message });
-    }
-
-    console.log(`📊 ${attendanceData?.length || 0} attendance records`);
+    const attendanceRows = await fetchAllRows(() =>
+      supabase.from("learner_attendance")
+        .select("learner_email, batch_no, date, session, status")
+        .eq("batch_no", batch_no)
+        .order("date").order("session").order("learner_email")
+    );
+    const attendance = attendanceRows.map((r) => ({ ...r, date: String(r.date).slice(0, 10) }));
 
     res.json({
-      attendance: attendanceData || [],
-      total_batch_sessions: totalBatchSessions,
-      sessions_till_today: sessionsTillToday,
-      planner_dates: plannerData?.map(p => p.date) || []   // ✅ ADD THIS
+      attendance,
+      total_batch_sessions: teachingDates.length,
+      sessions_till_today: teachingDates.filter((d) => d <= today).length,
+      planner_dates: teachingDates,
+      today,
+      start_date: teachingDates[0] || null,
+      end_date: teachingDates[teachingDates.length - 1] || null,
     });
-
   } catch (err) {
     console.error("🚨 API Error:", err);
-    res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ error: "Server error" });
   }
 });
 
@@ -5391,24 +5373,15 @@ app.get("/api/get_batch_dates", async (req, res) => {
     const batch_no = req.query.batch_no;
     if (!batch_no) return res.status(400).json({ error: "Batch number is required" });
 
-    // Supabase does not support aggregate queries in standard query, so workaround by
-    // fetching all dates for batch and find min/max in server code.
-    const { data, error } = await supabase
-      .from("course_planner_data")
-      .select("date")
-      .eq("batch_no", batch_no)
-      .order("date", { ascending: true });
+    const first = await supabase.from("course_planner_data").select("date").eq("batch_no", batch_no)
+      .order("date", { ascending: true }).limit(1);
+    const last = await supabase.from("course_planner_data").select("date").eq("batch_no", batch_no)
+      .order("date", { ascending: false }).limit(1);
+    if (first.error) throw first.error;
+    if (last.error) throw last.error;
 
-    if (error) throw error;
-
-    if (!data || data.length === 0) {
-      return res.status(404).json({ error: "Batch not found or no dates" });
-    }
-
-    const start_date = data[0].date;
-    const end_date = data[data.length - 1].date;
-
-    res.json({ start_date, end_date });
+    if (!first.data?.length) return res.status(404).json({ error: "Batch not found or no dates" });
+    res.json({ start_date: String(first.data[0].date).slice(0, 10), end_date: String(last.data[0].date).slice(0, 10) });
   } catch (err) {
     console.error("Error fetching batch dates:", err);
     res.status(500).json({ error: "Server error" });

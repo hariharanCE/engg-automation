@@ -18,13 +18,15 @@ import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { isInactiveLearnerStatus } from "../utils/learnerStatus";
+import {
+  SESSIONS_PER_DAY,
+  MIN_SESSIONS_FOR_DAY_PRESENT,
+  computeAttendance,
+  learnerStats,
+  attendanceColor,
+} from "../utils/attendanceCalc";
 
 const API_BASE = process.env.REACT_APP_API_URL || "https://engg-automation.vercel.app";
-
-// Each teaching day has 3 sessions. A learner is "present" for a day when they
-// attended at least 2 of the 3 sessions (1 session present = day absent).
-const SESSIONS_PER_DAY = 3;
-const MIN_SESSIONS_FOR_DAY_PRESENT = 2;
 
 /* ─── Design tokens (matches CourseProgress) ────────────────────────────── */
 const TOKENS = {
@@ -88,15 +90,19 @@ const inputSx = {
   "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: TOKENS.accent },
 };
 
-/* ─── Attendance percentage badge ────────────────────────────────────────── */
-function PctBadge({ pct }) {
-  const tok = pct >= 75 ? TOKENS.success : pct >= 50 ? TOKENS.warning : TOKENS.error;
+/* ─── Attendance percentage badge ────────────────────────────────────────────
+ * ≤ 50% red · 51–70% orange · 71–100% green (decided on the whole-number value) */
+function PctBadge({ pct, bold }) {
+  const c = attendanceColor(pct);
+  if (!c) {
+    return <Typography sx={{ fontFamily: "'DM Mono', monospace", fontSize: 12, color: TOKENS.textSub }}>—</Typography>;
+  }
   return (
     <Box sx={{
-      display: "inline-flex", px: 1.5, py: 0.4, borderRadius: "20px",
-      background: `${tok.fill}18`, border: `1px solid ${tok.fill}44`,
+      display: "inline-flex", px: 1.5, py: bold ? 0.6 : 0.4, borderRadius: "20px",
+      background: c.bg, border: `1px solid ${c.bd}`,
     }}>
-      <Typography sx={{ fontFamily: "'DM Mono', monospace", fontSize: 12, fontWeight: 800, color: tok.fill }}>
+      <Typography sx={{ fontFamily: "'DM Mono', monospace", fontSize: bold ? 13 : 12, fontWeight: 800, color: c.fill }}>
         {pct.toFixed(1)}%
       </Typography>
     </Box>
@@ -105,8 +111,7 @@ function PctBadge({ pct }) {
 
 /* ─── Detail row inside dialog ───────────────────────────────────────────── */
 function DetailRow({ label, value, total }) {
-  const pct  = total > 0 ? (value / total) * 100 : 0;
-  const tok  = pct >= 75 ? TOKENS.success : pct >= 50 ? TOKENS.warning : TOKENS.error;
+  const pct = total > 0 ? (value / total) * 100 : null;
   return (
     <Box sx={{
       display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -121,13 +126,7 @@ function DetailRow({ label, value, total }) {
           {value}
           <span style={{ color: TOKENS.textSub, fontWeight: 400 }}> / {total}</span>
         </Typography>
-        {total > 0 && (
-          <Box sx={{ px: 1, py: 0.2, borderRadius: "20px", background: `${tok.fill}18`, border: `1px solid ${tok.fill}44` }}>
-            <Typography sx={{ fontFamily: "'DM Mono', monospace", fontSize: 11, fontWeight: 700, color: tok.fill }}>
-              {pct.toFixed(1)}%
-            </Typography>
-          </Box>
-        )}
+        {pct !== null && <PctBadge pct={pct} />}
       </Box>
     </Box>
   );
@@ -165,8 +164,7 @@ export default function AttendanceReport({ user, token }) {
   const [attendanceData,     setAttendanceData]     = useState([]);
   const [learnersData,       setLearnersData]       = useState([]);
   const [plannerDates,       setPlannerDates]       = useState([]);
-  const [totalBatchSessions, setTotalBatchSessions] = useState(0);
-  const [sessionsTillToday,  setSessionsTillToday]  = useState(0);
+  const [serverToday,        setServerToday]        = useState("");
   const [loading,            setLoading]            = useState(false);
   const [selectedLearner,    setSelectedLearner]    = useState(null);
   const [detailDialogOpen,   setDetailDialogOpen]   = useState(false);
@@ -198,17 +196,15 @@ export default function AttendanceReport({ user, token }) {
           `${API_BASE}/api/learner-attendance`,
           { params: { batch_no: batchNo }, headers }
         );
-        const { attendance, total_batch_sessions, sessions_till_today, planner_dates } = attendanceRes.data;
+        const { attendance, planner_dates, today } = attendanceRes.data;
         setAttendanceData(attendance || []);
-        setTotalBatchSessions(total_batch_sessions || 0);
-        setSessionsTillToday(sessions_till_today || 0);
         setPlannerDates((planner_dates || []).map(d => typeof d === "string" ? d : d.date));
+        setServerToday(today || "");
         const learnersRes = await axios.get(`${API_BASE}/api/learners`, { params: { batch_no: batchNo }, headers });
         setLearnersData(learnersRes.data || []);
       } catch (err) {
         console.error(err);
-        setAttendanceData([]); setLearnersData([]); setPlannerDates([]);
-        setTotalBatchSessions(0); setSessionsTillToday(0);
+        setAttendanceData([]); setLearnersData([]); setPlannerDates([]); setServerToday("");
       } finally {
         setLoading(false);
       }
@@ -216,90 +212,64 @@ export default function AttendanceReport({ user, token }) {
     fetchData();
   }, [batchNo, token]);
 
-  /* ── Report (session-wise + day-wise) ───────────────────────────────────
-   * Total days   = unique dates in course_planner_data for the batch.
-   * Total sessions = 3 × total days (SESSIONS_PER_DAY).
-   * Session-wise: how many of the conducted sessions the learner attended.
-   * Day-wise: a day counts as present when ≥ 2 of its 3 sessions were present;
-   *           1 session present = that day is absent. */
-  const isPresentStatus = (s) => {
-    const v = (s || "").toString().trim().toUpperCase();
-    return v === "P" || v === "PRESENT";
-  };
-
+  /* ── Report ──────────────────────────────────────────────────────────────
+   * All maths lives in utils/attendanceCalc.js (shared with the Attendance
+   * Dashboard):
+   *   • Teaching days = unique course-planner dates (start → end), 3 sessions/day.
+   *   • A day is PRESENT when ≥ 2 of its 3 sessions were attended (P / Present);
+   *     1 session present = the day is absent.
+   *   • Attendance % = days present ÷ teaching days conducted so far.
+   *   • Only attendance on teaching days counts, so a % can never exceed 100.
+   * Every learner of the batch is listed — including learners that have no
+   * attendance rows yet (0%). */
   const summary = useMemo(() => {
-    const today = new Date().toISOString().split("T")[0];
+    const calc = computeAttendance(attendanceData, plannerDates, { today: serverToday });
 
-    const distinctDates      = [...new Set(plannerDates.filter(Boolean))];
-    const totalBatchDays     = distinctDates.length;
-    const totalDaysTillToday = distinctDates.filter(d => d <= today).length;
-    const totalSessionsAll   = totalBatchDays * SESSIONS_PER_DAY;
-    const totalSessionsTillToday = totalDaysTillToday * SESSIONS_PER_DAY;
+    const seen = new Set();
+    const list = [];
 
-    // Group attendance by learner → date → set of present sessions.
-    const byLearner = {};
-    attendanceData.forEach((row, i) => {
-      if (!row.learner_email || row.date > today) return;
-      const email = row.learner_email.trim().toLowerCase();
-      if (!byLearner[email]) byLearner[email] = { email: row.learner_email, dates: {} };
-      const dayMap = byLearner[email].dates;
-      if (!dayMap[row.date]) dayMap[row.date] = new Set();
-      if (isPresentStatus(row.status)) {
-        // Dedupe by session id; fall back to a unique token when absent.
-        const sess = (row.session ?? "").toString().trim() || `__${i}`;
-        dayMap[row.date].add(sess);
-      }
+    learnersData.forEach((lr) => {
+      const key = (lr.email || "").trim().toLowerCase();
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      list.push({
+        name:     lr.name || key.split("@")[0],
+        email:    lr.email,
+        status:   lr.status || "",
+        inactive: isInactiveLearnerStatus(lr.status),
+        ...learnerStats(calc, key),
+      });
     });
 
-    const learners = Object.values(byLearner).map((l) => {
-      let sessionsPresent = 0;
-      let daysPresent = 0;
-      Object.values(l.dates).forEach((set) => {
-        const c = Math.min(set.size, SESSIONS_PER_DAY);
-        sessionsPresent += c;
-        if (c >= MIN_SESSIONS_FOR_DAY_PRESENT) daysPresent++;
+    /* anyone with attendance rows who is not in the learners list */
+    Object.keys(calc.byEmail).forEach((key) => {
+      if (seen.has(key)) return;
+      seen.add(key);
+      list.push({
+        name: key.split("@")[0], email: key, status: "", inactive: false,
+        ...calc.byEmail[key],
       });
-      const lr = learnersData.find(x =>
-        x.email?.trim().toLowerCase() === l.email.trim().toLowerCase()
-      );
-      const name = lr?.name || l.email.split("@")[0];
-      const inactive = isInactiveLearnerStatus(lr?.status);
-      const sessionPct = totalSessionsTillToday > 0 ? (sessionsPresent / totalSessionsTillToday) * 100 : 0;
-      const dayPct     = totalDaysTillToday     > 0 ? (daysPresent     / totalDaysTillToday)     * 100 : 0;
-      return { name, email: l.email, sessionsPresent, daysPresent, sessionPct, dayPct, inactive, status: lr?.status || "" };
-    }).sort((a, b) => a.name.localeCompare(b.name));
+    });
 
-    return {
-      learners,
-      totalBatchDays, totalDaysTillToday,
-      totalSessionsAll, totalSessionsTillToday,
-    };
-  }, [attendanceData, learnersData, plannerDates]);
-
-  /* ── Per-learner detail (for the dialog) ── */
-  const calculateLearnerDetails = (learnerEmail) => {
-    const l = summary.learners.find(x => x.email === learnerEmail) || { sessionsPresent: 0, daysPresent: 0 };
-    return {
-      sessionsPresent:      l.sessionsPresent,
-      totalSessionsAll:     summary.totalSessionsAll,
-      totalSessionsTillToday: summary.totalSessionsTillToday,
-      daysPresent:          l.daysPresent,
-      totalBatchDays:       summary.totalBatchDays,
-      totalDaysTillToday:   summary.totalDaysTillToday,
-    };
-  };
+    list.sort((a, b) => a.name.localeCompare(b.name));
+    return { ...calc, learners: list };
+  }, [attendanceData, learnersData, plannerDates, serverToday]);
 
   /* ── Download helpers (xlsx / pdf) ── */
+  const fmt = (v) => (v === null || v === undefined ? "" : Number(v.toFixed(1)));
+
   const buildReportRows = () => summary.learners.map((l, i) => ({
     "#": i + 1,
     "Learner": l.name,
     "Email": l.email,
     "Sessions Present": l.sessionsPresent,
-    "Total Sessions": summary.totalSessionsTillToday,
-    "Session %": Number(l.sessionPct.toFixed(1)),
+    "Sessions Conducted": summary.conductedSessions,
+    "Session %": fmt(l.sessionPct),
     "Days Present": l.daysPresent,
-    "Total Days": summary.totalDaysTillToday,
-    "Day %": Number(l.dayPct.toFixed(1)),
+    "Days Conducted": summary.conductedDays,
+    "Attendance % (Days)": fmt(l.dayPct),
+    "Total Course Days": summary.totalCourseDays,
+    "Course % (of all days)": fmt(l.coursePct),
   }));
 
   const downloadXlsx = () => {
@@ -311,22 +281,33 @@ export default function AttendanceReport({ user, token }) {
   };
 
   const downloadPdf = () => {
-    const doc = new jsPDF();
+    const doc = new jsPDF({ orientation: "landscape" });
     doc.setFontSize(14);
     doc.text(`Attendance Report — ${batchNo || ""}`, 14, 16);
     doc.setFontSize(9);
     doc.text(
-      `Days till today: ${summary.totalDaysTillToday}/${summary.totalBatchDays}   ` +
-      `Sessions till today: ${summary.totalSessionsTillToday}/${summary.totalSessionsAll}`,
+      `Course: ${summary.startDate || "—"} to ${summary.endDate || "—"}   |   ` +
+      `Days conducted: ${summary.conductedDays}/${summary.totalCourseDays}   |   ` +
+      `Sessions conducted: ${summary.conductedSessions}/${summary.totalCourseSessions}   |   ` +
+      `Present = at least ${MIN_SESSIONS_FOR_DAY_PRESENT} of ${SESSIONS_PER_DAY} sessions`,
       14, 22
     );
+
+    /* colour the two % columns: <=50 red, 51-70 orange, 71-100 green */
+    const pctCell = (pct) => {
+      const c = attendanceColor(pct);
+      if (!c) return "—";
+      const rgb = c.key === "red" ? [220, 38, 38] : c.key === "orange" ? [234, 88, 12] : [22, 163, 74];
+      return { content: `${pct.toFixed(1)}%`, styles: { textColor: rgb, fontStyle: "bold" } };
+    };
+
     autoTable(doc, {
       startY: 27,
-      head: [["#", "Learner", "Email", "Sess. Present", "Total Sess.", "Session %", "Days Present", "Total Days", "Day %"]],
+      head: [["#", "Learner", "Email", "Sess. Present", "Sess. Conducted", "Session %", "Days Present", "Days Conducted", "Attendance %", "Course %"]],
       body: summary.learners.map((l, i) => [
         i + 1, l.name, l.email,
-        l.sessionsPresent, summary.totalSessionsTillToday, `${l.sessionPct.toFixed(1)}%`,
-        l.daysPresent, summary.totalDaysTillToday, `${l.dayPct.toFixed(1)}%`,
+        l.sessionsPresent, summary.conductedSessions, pctCell(l.sessionPct),
+        l.daysPresent, summary.conductedDays, pctCell(l.dayPct), pctCell(l.coursePct),
       ]),
       styles: { fontSize: 8, cellPadding: 2 },
       headStyles: { fillColor: [61, 90, 254] },
@@ -371,15 +352,15 @@ export default function AttendanceReport({ user, token }) {
                 <StatPill
                   icon={<DayIcon sx={{ fontSize: 16 }} />}
                   label="Days Conducted"
-                  value={summary.totalDaysTillToday}
-                  sub={` / ${summary.totalBatchDays}`}
+                  value={summary.conductedDays}
+                  sub={` / ${summary.totalCourseDays}`}
                   accent
                 />
                 <StatPill
                   icon={<SessionIcon sx={{ fontSize: 16 }} />}
                   label="Sessions Conducted"
-                  value={summary.totalSessionsTillToday}
-                  sub={` / ${summary.totalSessionsAll}`}
+                  value={summary.conductedSessions}
+                  sub={` / ${summary.totalCourseSessions}`}
                 />
                 <StatPill
                   icon={<PeopleIcon sx={{ fontSize: 16 }} />}
@@ -413,6 +394,41 @@ export default function AttendanceReport({ user, token }) {
               </>
             )}
           </Box>
+
+          {/* How it is calculated + colour legend */}
+          {batchNo && !loading && (
+            <Box sx={{ mt: 2.5, pt: 2, borderTop: `1px dashed ${TOKENS.border}`, display: "flex", gap: 3, flexWrap: "wrap", alignItems: "center" }}>
+              <Typography sx={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: TOKENS.textSub }}>
+                <strong>Course:</strong> {summary.startDate || "—"} → {summary.endDate || "—"} ·{" "}
+                {summary.totalCourseDays} days × {SESSIONS_PER_DAY} sessions = {summary.totalCourseSessions} sessions ·{" "}
+                <strong>Present</strong> = at least {MIN_SESSIONS_FOR_DAY_PRESENT} of {SESSIONS_PER_DAY} sessions
+              </Typography>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, ml: { md: "auto" } }}>
+                {[
+                  { c: attendanceColor(0),  t: "0–50%"    },
+                  { c: attendanceColor(60), t: "51–70%"   },
+                  { c: attendanceColor(90), t: "71–100%"  },
+                ].map(({ c, t }) => (
+                  <Box key={t} sx={{ display: "flex", alignItems: "center", gap: 0.6 }}>
+                    <Box sx={{ width: 10, height: 10, borderRadius: "50%", background: c.fill }} />
+                    <Typography sx={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: TOKENS.textSub }}>{t}</Typography>
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+          )}
+
+          {/* Data-quality warning: teaching days that nobody marked */}
+          {batchNo && !loading && summary.unmarkedPastDays.length > 0 && (
+            <Box sx={{ mt: 2, px: 2, py: 1.2, borderRadius: "10px", background: TOKENS.warning.light, border: `1px solid ${TOKENS.warning.fill}55` }}>
+              <Typography sx={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 600, color: TOKENS.warning.text }}>
+                ⚠ Attendance has not been marked for {summary.unmarkedPastDays.length} teaching day
+                {summary.unmarkedPastDays.length !== 1 ? "s" : ""}
+                {" "}({summary.unmarkedPastDays.slice(0, 5).join(", ")}{summary.unmarkedPastDays.length > 5 ? " …" : ""}).
+                These days are counted as absent for every learner until attendance is marked.
+              </Typography>
+            </Box>
+          )}
         </Box>
 
         {/* ── Loading state ── */}
@@ -457,7 +473,7 @@ export default function AttendanceReport({ user, token }) {
                     <TableCell align="center" sx={tableHeadSx}>Sessions</TableCell>
                     <TableCell align="center" sx={tableHeadSx}>Session %</TableCell>
                     <TableCell align="center" sx={tableHeadSx}>Days</TableCell>
-                    <TableCell align="center" sx={tableHeadSx}>Day %</TableCell>
+                    <TableCell align="center" sx={tableHeadSx}>Attendance %</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -465,7 +481,7 @@ export default function AttendanceReport({ user, token }) {
                     <TableRow>
                       <TableCell colSpan={7} align="center" sx={{ py: 7 }}>
                         <Typography sx={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: TOKENS.textSub }}>
-                          No attendance records found for this batch.
+                          No learners found for this batch.
                         </Typography>
                       </TableCell>
                     </TableRow>
@@ -495,7 +511,7 @@ export default function AttendanceReport({ user, token }) {
                           <TableCell align="center" sx={tableCellSx}>
                             <Typography sx={{ fontFamily: "'DM Mono', monospace", fontSize: 13, fontWeight: 700, color: TOKENS.text }}>
                               {learner.sessionsPresent}
-                              <span style={{ color: TOKENS.textSub, fontWeight: 400 }}> / {summary.totalSessionsTillToday}</span>
+                              <span style={{ color: TOKENS.textSub, fontWeight: 400 }}> / {summary.conductedSessions}</span>
                             </Typography>
                           </TableCell>
                           <TableCell align="center" sx={tableCellSx}>
@@ -504,11 +520,11 @@ export default function AttendanceReport({ user, token }) {
                           <TableCell align="center" sx={tableCellSx}>
                             <Typography sx={{ fontFamily: "'DM Mono', monospace", fontSize: 13, fontWeight: 700, color: TOKENS.text }}>
                               {learner.daysPresent}
-                              <span style={{ color: TOKENS.textSub, fontWeight: 400 }}> / {summary.totalDaysTillToday}</span>
+                              <span style={{ color: TOKENS.textSub, fontWeight: 400 }}> / {summary.conductedDays}</span>
                             </Typography>
                           </TableCell>
                           <TableCell align="center" sx={tableCellSx}>
-                            <PctBadge pct={learner.dayPct} />
+                            <PctBadge pct={learner.pct} bold />
                           </TableCell>
                         </TableRow>
                     ))
@@ -560,19 +576,37 @@ export default function AttendanceReport({ user, token }) {
 
         <DialogContent sx={{ p: 3 }}>
           {selectedLearner && (() => {
-            const d = calculateLearnerDetails(selectedLearner.email);
+            const s = learnerStats(summary, selectedLearner.email);
             return (
               <Box>
-                <Typography sx={{ ...labelSx, mb: 1.5 }}>Session-wise (3 sessions / day)</Typography>
-                <Box sx={{ mb: 3, border: `1px solid ${TOKENS.border}`, borderRadius: "10px", overflow: "hidden" }}>
-                  <DetailRow label="Total Batch Sessions" value={d.sessionsPresent} total={d.totalSessionsAll} />
-                  <DetailRow label="Sessions Present (till today)" value={d.sessionsPresent} total={d.totalSessionsTillToday} />
+                {/* Headline figure */}
+                <Box sx={{ mb: 3, px: 2, py: 1.8, borderRadius: "12px", background: TOKENS.surfaceAlt, border: `1px solid ${TOKENS.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <Box>
+                    <Typography sx={{ ...labelSx, fontSize: 10 }}>Attendance %</Typography>
+                    <Typography sx={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: TOKENS.textSub, mt: 0.3 }}>
+                      {s.daysPresent} days present ÷ {summary.conductedDays} days conducted
+                    </Typography>
+                  </Box>
+                  <PctBadge pct={s.pct} bold />
                 </Box>
 
-                <Typography sx={{ ...labelSx, mb: 1.5 }}>Day-wise (present = ≥ 2 of 3 sessions)</Typography>
-                <Box sx={{ border: `1px solid ${TOKENS.border}`, borderRadius: "10px", overflow: "hidden" }}>
-                  <DetailRow label="Total Batch Days"  value={d.daysPresent} total={d.totalBatchDays} />
-                  <DetailRow label="Days Present (till today)" value={d.daysPresent} total={d.totalDaysTillToday} />
+                <Typography sx={{ ...labelSx, mb: 1.5 }}>Day-wise (present = ≥ {MIN_SESSIONS_FOR_DAY_PRESENT} of {SESSIONS_PER_DAY} sessions)</Typography>
+                <Box sx={{ mb: 3, border: `1px solid ${TOKENS.border}`, borderRadius: "10px", overflow: "hidden" }}>
+                  <DetailRow label="Days Present (conducted so far)" value={s.daysPresent} total={summary.conductedDays} />
+                  <DetailRow label="Days Present (whole course, start → end)" value={s.daysPresent} total={summary.totalCourseDays} />
+                </Box>
+
+                <Typography sx={{ ...labelSx, mb: 1.5 }}>Session-wise ({SESSIONS_PER_DAY} sessions / day)</Typography>
+                <Box sx={{ mb: 3, border: `1px solid ${TOKENS.border}`, borderRadius: "10px", overflow: "hidden" }}>
+                  <DetailRow label="Sessions Present (conducted so far)" value={s.sessionsPresent} total={summary.conductedSessions} />
+                  <DetailRow label="Sessions Present (whole course)" value={s.sessionsPresent} total={summary.totalCourseSessions} />
+                </Box>
+
+                <Typography sx={{ ...labelSx, mb: 1.2 }}>Days counted as absent ({s.absentDays.length})</Typography>
+                <Box sx={{ px: 2, py: 1.3, border: `1px solid ${TOKENS.border}`, borderRadius: "10px", maxHeight: 130, overflowY: "auto" }}>
+                  <Typography sx={{ fontFamily: "'DM Mono', monospace", fontSize: 12, color: s.absentDays.length ? TOKENS.error.text : TOKENS.success.text, lineHeight: 1.8 }}>
+                    {s.absentDays.length ? s.absentDays.join("  ·  ") : "None — present on every conducted day"}
+                  </Typography>
                 </Box>
               </Box>
             );

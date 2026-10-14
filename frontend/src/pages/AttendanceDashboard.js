@@ -1,10 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import { isInactiveLearnerStatus } from "../utils/learnerStatus";
-
-// A learner is "locked" (greyed, non-markable) when Disabled, or inactive
-// (Dropout / Batch Movement).
-const isLearnerLocked = (l) => l?.status === "Disabled" || isInactiveLearnerStatus(l?.status);
 import {
   Box,
   Typography,
@@ -24,6 +19,12 @@ import {
   Chip,
   Fade,
 } from "@mui/material";
+import { isInactiveLearnerStatus } from "../utils/learnerStatus";
+import { computeAttendance, learnerStats, attendanceColor } from "../utils/attendanceCalc";
+
+// A learner is "locked" (greyed, non-markable) when Disabled, or inactive
+// (Dropout / Batch Movement).
+const isLearnerLocked = (l) => l?.status === "Disabled" || isInactiveLearnerStatus(l?.status);
 
 /* Returns YYYY-MM-DD for today in the *local* timezone (not UTC).
  * `new Date().toISOString().slice(0,10)` returns UTC date which can shift
@@ -52,60 +53,16 @@ function getStoredUser() {
 const API_BASE       = process.env.REACT_APP_API_URL || "https://engg-automation.vercel.app";
 const sessionsPerDay = 3;
 
-/* A day counts as "present" when the learner attended ≥ 2 of the 3 sessions.
- * This mirrors the calculation in AttendanceReport.js so the overall % shown
- * here matches the report exactly. */
-const MIN_SESSIONS_FOR_DAY_PRESENT = 2;
-
-const isPresentStatus = (s) => {
-  const v = (s || "").toString().trim().toUpperCase();
-  return v === "P" || v === "PRESENT";
-};
-
-/* Compute each learner's overall (day-wise) attendance % from the batch-wide
- * rows returned by /api/learner-attendance — the same source and math the
- * Attendance Report uses: present teaching days / teaching days elapsed today.
- * Returns { byEmail: { <lowercased email>: { dayPct, daysPresent } },
- *           totalDaysTillToday }. */
-function computeOverallAttendance(attendanceRows, plannerDates) {
-  const today              = getLocalToday();
-  const distinctDates      = [...new Set((plannerDates || []).filter(Boolean))];
-  const totalDaysTillToday = distinctDates.filter((d) => d <= today).length;
-
-  // Group attendance by learner → date → set of present sessions.
-  const byLearner = {};
-  (attendanceRows || []).forEach((row, i) => {
-    if (!row.learner_email || row.date > today) return;
-    const email = row.learner_email.trim().toLowerCase();
-    if (!byLearner[email]) byLearner[email] = {};
-    if (!byLearner[email][row.date]) byLearner[email][row.date] = new Set();
-    if (isPresentStatus(row.status)) {
-      // Dedupe by session id; fall back to a unique token when absent.
-      const sess = (row.session ?? "").toString().trim() || `__${i}`;
-      byLearner[email][row.date].add(sess);
-    }
-  });
-
-  const byEmail = {};
-  Object.entries(byLearner).forEach(([email, dates]) => {
-    let daysPresent = 0;
-    Object.values(dates).forEach((set) => {
-      if (Math.min(set.size, sessionsPerDay) >= MIN_SESSIONS_FOR_DAY_PRESENT) daysPresent += 1;
-    });
-    const dayPct = totalDaysTillToday > 0 ? (daysPresent / totalDaysTillToday) * 100 : 0;
-    byEmail[email] = { dayPct, daysPresent };
-  });
-
-  return { byEmail, totalDaysTillToday };
-}
-
-/* ── Overall attendance % badge (green ≥ 75, amber ≥ 50, red below) ── */
+/* ── Overall attendance % badge ─────────────────────────────────────────────
+ * ≤ 50% red · 51–70% orange · 71–100% green. The percentage itself comes from
+ * the shared calculator (utils/attendanceCalc.js) so it matches the Attendance
+ * Report exactly: a day is present when ≥ 2 of the 3 sessions were attended,
+ * and % = days present ÷ teaching days conducted. */
 function PctBadge({ pct }) {
-  const c = pct >= 75
-    ? { fill: "#15803d", bg: "#dcfce7", bd: "#86efac" }
-    : pct >= 50
-      ? { fill: "#b45309", bg: "#fef3c7", bd: "#fcd34d" }
-      : { fill: "#b91c1c", bg: "#fee2e2", bd: "#fca5a5" };
+  const c = attendanceColor(pct);
+  if (!c) {
+    return <Typography sx={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: "#5b6f9c" }}>—</Typography>;
+  }
   return (
     <Box sx={{ display: "inline-flex", px: 1.2, py: 0.4, borderRadius: "12px", background: c.bg, border: `1px solid ${c.bd}` }}>
       <Typography sx={{ fontFamily: "'DM Mono', monospace", fontSize: 12, fontWeight: 800, color: c.fill }}>
@@ -207,10 +164,9 @@ export default function AttendanceDashboard({ token, user }) {
   const [saving,      setSaving]      = useState(false);
   const [message,     setMessage]     = useState("");
 
-  /* Overall (cumulative) attendance % per learner, keyed by lowercased email.
-   * Shown in the table so trainers see each learner's standing while marking.
-   * Same source & math as the Attendance Report. */
-  const [overallPct,  setOverallPct]  = useState({ byEmail: {}, totalDaysTillToday: 0 });
+  /* Overall (cumulative) attendance per learner — result of the shared
+   * calculator, so it is identical to the Attendance Report. */
+  const [overallPct,  setOverallPct]  = useState(() => computeAttendance([], []));
 
   /* Track which learners have unsaved changes (to show a dirty indicator) */
   const [dirtyEmails, setDirtyEmails] = useState(new Set());
@@ -223,22 +179,22 @@ export default function AttendanceDashboard({ token, user }) {
 
   const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
 
-  /* ── Load overall attendance % for the whole batch (same endpoint & math as
+  /* ── Load overall attendance for the whole batch (same endpoint & shared math as
    *    the Attendance Report). Runs on batch change and after every save so the
    *    figure stays current as attendance is marked. ── */
   const loadOverallAttendance = useCallback(async () => {
-    if (!batchNo) { setOverallPct({ byEmail: {}, totalDaysTillToday: 0 }); return; }
+    if (!batchNo) { setOverallPct(computeAttendance([], [])); return; }
     try {
       const res = await axios.get(`${API_BASE}/api/learner-attendance`, {
         params:  { batch_no: batchNo },
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      const { attendance, planner_dates } = res.data || {};
+      const { attendance: rows, planner_dates, today } = res.data || {};
       const plannerArr = (planner_dates || []).map((d) => (typeof d === "string" ? d : d.date));
-      setOverallPct(computeOverallAttendance(attendance || [], plannerArr));
+      setOverallPct(computeAttendance(rows || [], plannerArr, { today }));
     } catch (e) {
       console.error("Failed to load overall attendance", e);
-      setOverallPct({ byEmail: {}, totalDaysTillToday: 0 });
+      setOverallPct(computeAttendance([], []));
     }
   }, [batchNo, token]);
 
@@ -1021,6 +977,20 @@ export default function AttendanceDashboard({ token, user }) {
                 Green check + thicker border = saved in DB
               </Typography>
             </Box>
+            {/* Overall % colour legend */}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, ml: { md: "auto" } }}>
+              <Typography sx={{ ...labelSx, fontSize: 9 }}>Overall %:</Typography>
+              {[
+                { c: attendanceColor(0),   t: "≤ 50%"    },
+                { c: attendanceColor(60),  t: "51–70%"   },
+                { c: attendanceColor(90),  t: "71–100%"  },
+              ].map(({ c, t }) => (
+                <Box key={t} sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <Box sx={{ width: 10, height: 10, borderRadius: "50%", background: c.fill }} />
+                  <Typography sx={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: T.textSub }}>{t}</Typography>
+                </Box>
+              ))}
+            </Box>
           </Box>
 
           <Box sx={{ overflowX: "auto" }}>
@@ -1053,12 +1023,11 @@ export default function AttendanceDashboard({ token, user }) {
                   const savedSessions = isDisabled ? 0 : getSavedCount(learner.email);
                   const fullySaved    = !isDisabled && savedSessions === sessionsPerDay;
 
-                  /* Overall (cumulative) attendance % — null when there are no
-                   * teaching days elapsed yet (nothing meaningful to show). */
-                  const emailKey    = (learner.email || "").trim().toLowerCase();
-                  const ov          = overallPct.byEmail[emailKey];
-                  const overallVal  = ov ? ov.dayPct : (overallPct.totalDaysTillToday > 0 ? 0 : null);
-                  const daysPresent = ov ? ov.daysPresent : 0;
+                  /* Overall attendance % from the shared calculator — null when no
+                   * teaching day has been conducted yet (nothing meaningful to show). */
+                  const st          = learnerStats(overallPct, learner.email);
+                  const overallVal  = overallPct.conductedDays > 0 ? st.pct : null;
+                  const daysPresent = st.daysPresent;
                   return (
                     <TableRow
                       key={learner.email}
@@ -1104,7 +1073,7 @@ export default function AttendanceDashboard({ token, user }) {
                           <Typography sx={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: T.textSub }}>—</Typography>
                         ) : (
                           <Box
-                            title={`${daysPresent}/${overallPct.totalDaysTillToday} teaching days present (≥ 2 of 3 sessions = present)`}
+                            title={`${daysPresent}/${overallPct.conductedDays} teaching days present (≥ 2 of 3 sessions = present)`}
                             sx={{ display: "inline-flex" }}
                           >
                             <PctBadge pct={overallVal} />
