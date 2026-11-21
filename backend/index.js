@@ -5077,7 +5077,7 @@ app.get("/api/scorecard/:batchNo", async (req, res) => {
       const placement =
         projectOutOf100 >= 70 &&
         vivaOutOf100 >= 70 &&
-        overall >= 80
+        overall >= 70
           ? "YES"
           : "NO";
 
@@ -11173,7 +11173,7 @@ function buildMarksEmailHtml({ name, email, batch_no, assessment_label, headers,
         <p style="margin:22px 0 4px;"><b>Note:</b></p>
         <ul style="margin:4px 0 0;padding-left:28px;">
           <li><b>Certification Eligibility:</b> 70% and above in Overall Course Percentage</li>
-          <li><b>Eligibility for Placement Assistance:</b> 80% and above in Overall Course Percentage and 70% and above in Final Project and Viva</li>
+          <li><b>Eligibility for Placement Assistance:</b> 70% and above in Overall Course Percentage and 70% and above in Final Project and Viva</li>
           <li>If you notice any discrepancies or have any questions, please revert back to the same email within <b>48 hours</b>. Queries raised after this timeframe will not be entertained.</li>
         </ul>
         <br>
