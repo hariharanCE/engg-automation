@@ -4365,7 +4365,7 @@ function recalcScorecardRow(kind, comp, weights) {
     overall:       overall.toFixed(2),
     grade:         scGrade(overall),
     certification: project >= 70 && overall >= 70 ? "YES" : "NO",
-    placement:     project >= 70 && viva >= 70 && overall >= 80 ? "YES" : "NO",
+    placement:     project >= 70 && viva >= 70 && overall >=70 ? "YES" : "NO",
   };
 }
 
@@ -5281,7 +5281,7 @@ app.get("/api/scorecard-dvft/:batchNo", async (req, res) => {
         projectPct>=70 && overall>=70 ? "YES":"NO"
 
       const placement =
-        projectPct>=70 && vivaPct>=70 && overall>=80 ? "YES":"NO"
+        projectPct>=70 && vivaPct>=70 && overall>=70 ? "YES":"NO"
 
       results.push({
         name:learner.name,
