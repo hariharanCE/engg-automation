@@ -245,7 +245,7 @@ function recalcScorecard(kind, comp, weights) {
     overall:       overall.toFixed(2),
     grade:         scGrade(overall),
     certification: project >= 70 && overall >= 70 ? "YES" : "NO",
-    placement:     project >= 70 && viva >= 70 && overall >= 80 ? "YES" : "NO",
+    placement:     project >= 70 && viva >= 70 && overall >= 70 ? "YES" : "NO",
   };
 }
 
@@ -584,7 +584,7 @@ function PdftScorecardTable({ data, batchNo, edit }) {
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <SchoolIcon sx={{ fontSize: 14, color: TOKENS.textSub }} />
           {/* ✅ FIXED: Project threshold corrected from 70% → 60% */}
-          <Typography sx={{ ...labelSx, fontSize: 10 }}>Placement: Project ≥ 60% AND Viva ≥ 70% AND Overall ≥ 80%</Typography>
+          <Typography sx={{ ...labelSx, fontSize: 10 }}>Placement: Project ≥ 60% AND Viva ≥ 70% AND Overall ≥ 70%</Typography>
         </Box>
         <Typography sx={{ ...labelSx, fontSize: 10 }}>
           Weightage: Intermediate 10% · Digital+CMOS+TCL 20% · Physical 30% · Project 30% · Viva 10%
@@ -706,7 +706,7 @@ function DvftScorecardTable({ data, batchNo, edit }) {
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <SchoolIcon sx={{ fontSize: 14, color: TOKENS.textSub }} />
           {/* ✅ FIXED: Project threshold corrected from 70% → 60% */}
-          <Typography sx={{ ...labelSx, fontSize: 10 }}>Placement: Project ≥ 60% AND Viva ≥ 70% AND Overall ≥ 80%</Typography>
+          <Typography sx={{ ...labelSx, fontSize: 10 }}>Placement: Project ≥ 60% AND Viva ≥ 70% AND Overall ≥ 70%</Typography>
         </Box>
         <Typography sx={{ ...labelSx, fontSize: 10 }}>
           Weightage: Intermediate 10% · Digital+Verilog 20% · SV+UVM+Python 30% · Project 30% · Viva 10%
