@@ -4365,7 +4365,7 @@ function recalcScorecardRow(kind, comp, weights) {
     overall:       overall.toFixed(2),
     grade:         scGrade(overall),
     certification: project >= 70 && overall >= 70 ? "YES" : "NO",
-    placement:     project >= 70 && viva >= 70 && overall >=70 ? "YES" : "NO",
+    placement:     overall >= 70 ? "YES" : "NO",
   };
 }
 
@@ -5075,11 +5075,7 @@ app.get("/api/scorecard/:batchNo", async (req, res) => {
       //   Viva >= 70%     AND
       //   Overall >= 80%
       const placement =
-        projectOutOf100 >= 70 &&
-        vivaOutOf100 >= 70 &&
-        overall >= 70
-          ? "YES"
-          : "NO";
+        overall >= 70 ? "YES" : "NO";
 
       // Debug log (remove or reduce in production)
       console.log(
@@ -5281,7 +5277,7 @@ app.get("/api/scorecard-dvft/:batchNo", async (req, res) => {
         projectPct>=70 && overall>=70 ? "YES":"NO"
 
       const placement =
-        projectPct>=70 && vivaPct>=70 && overall>=70 ? "YES":"NO"
+        overall >= 70 ? "YES" : "NO"
 
       results.push({
         name:learner.name,
@@ -11173,7 +11169,7 @@ function buildMarksEmailHtml({ name, email, batch_no, assessment_label, headers,
         <p style="margin:22px 0 4px;"><b>Note:</b></p>
         <ul style="margin:4px 0 0;padding-left:28px;">
           <li><b>Certification Eligibility:</b> 70% and above in Overall Course Percentage</li>
-          <li><b>Eligibility for Placement Assistance:</b> 70% and above in Overall Course Percentage and 70% and above in Final Project and Viva</li>
+          <li><b>Eligibility for Placement Assistance:</b> 70% and above in Overall Course Percentage</li>
           <li>If you notice any discrepancies or have any questions, please revert back to the same email within <b>48 hours</b>. Queries raised after this timeframe will not be entertained.</li>
         </ul>
         <br>

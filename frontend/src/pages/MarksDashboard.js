@@ -245,7 +245,7 @@ function recalcScorecard(kind, comp, weights) {
     overall:       overall.toFixed(2),
     grade:         scGrade(overall),
     certification: project >= 70 && overall >= 70 ? "YES" : "NO",
-    placement:     project >= 70 && viva >= 70 && overall >= 70 ? "YES" : "NO",
+    placement:     overall >= 70 ? "YES" : "NO",
   };
 }
 
