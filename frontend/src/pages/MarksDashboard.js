@@ -905,7 +905,7 @@ export default function MarksDashboard({ user }) {
     const e = edits[row.email];
     if (!e || !Object.keys(e).length) {
       const p = parseFloat(row.project), v = parseFloat(row.viva), o = parseFloat(row.overall);
-      const eligible = p >= 70 && v >= 70 && o >= 70;
+      const eligible = o >= 70;
       return { ...row, placement: eligible ? "YES" : "NO" };
     }
 
