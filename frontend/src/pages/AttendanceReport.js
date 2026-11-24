@@ -18,6 +18,13 @@ import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { isInactiveLearnerStatus } from "../utils/learnerStatus";
+import {
+  SESSIONS_PER_DAY,
+  MIN_SESSIONS_FOR_DAY_PRESENT,
+  computeAttendance,
+  learnerStats,
+  attendanceColor,
+} from "../utils/attendanceCalc";
 
 const API_BASE = process.env.REACT_APP_API_URL || "https://engg-automation.vercel.app";
 

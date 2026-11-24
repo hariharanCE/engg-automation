@@ -20,6 +20,7 @@ import {
   Fade,
 } from "@mui/material";
 import { isInactiveLearnerStatus } from "../utils/learnerStatus";
+import { computeAttendance, learnerStats, attendanceColor } from "../utils/attendanceCalc";
 
 // A learner is "locked" (greyed, non-markable) when Disabled, or inactive
 // (Dropout / Batch Movement).
